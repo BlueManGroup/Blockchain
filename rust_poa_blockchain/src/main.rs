@@ -2,16 +2,23 @@ use chrono::prelude::*;
 use sha2::{Sha256, Digest};
 
 #[derive(Debug)]
+struct BlockData {
+    election: String, // could also just be int. identifies which election this block was created for
+    vote: String, // what the user voted for. should be in something not plaintext
+    user: Stirng, // user identifier. should be anonymized
+    validator: String, // identity of the validator. could be integer as well
+}
+
 struct Block {
-    index: u64,
-    timestamp: i64,
-    prev_block_hash: String,
-    hash: String,
-    data: String,
+    index: u64, // block index
+    timestamp: i64, // self explanatory
+    prev_block_hash: String, // also self explanatory
+    hash: String, // block's own hash
+    data: BlockData //
 }
 
 impl Block {
-    fn new(index: u64, timestamp: i64, prev_block_hash: String, data: String) -> Self {
+    fn new(index: u64, timestamp: i64, prev_block_hash: String, data: BlockData) -> Self {
         let mut block = Block {
             index,
             timestamp,
@@ -22,7 +29,7 @@ impl Block {
         block.hash = block.calculate_hash();
         block
     }
-
+//Benis
     fn calculate_hash(&self) -> String {
         let headers = format!("{}{}{}{}", &self.index, &self.timestamp, &self.prev_block_hash, &self.data);
         let mut hasher = Sha256::new();
@@ -47,6 +54,7 @@ impl Blockchain {
     }
 
     fn add_block(&mut self, data: String, authority: String) {
+        // edit to check some key thingy 
         if !self.authorities.contains(&authority) {
             println!("Authority not recognized.");
             return;
