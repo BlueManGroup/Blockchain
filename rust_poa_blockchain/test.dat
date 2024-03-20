@@ -1,5 +1,5 @@
-"test"
-"test"
-"fuck Mathias"
-"han er så fucking dum"
 {"data":"Block 1 Data","hash":"d2825359705bb7f7d347eb3f569baf2141b2c731d6eed45d37fea48005cebe01","index":1,"prev_block_hash":"b7469095829ab0df275525d2763ec4d86668fae7b0711b401da5b2a45bc52795","timestamp":1710935242}
+{"data":"Block 1 Data","hash":"3d2e2ecfde8bd9781c52dd1ab0c28610322f84d8e27b8e76431cdd43b52a38f1","index":1,"prev_block_hash":"a3f1bc03668990a519938d49c406ff8cae9af83ba1478718ef54741a30cd2982","timestamp":1710938193}
+{"data":"Block 1 Data","hash":"54cc1511b74787ccb90d1981e38e23bb3df95900a613cbda6ea314fc28bdf03d","index":1,"prev_block_hash":"377df42959ab66bd343172dca27d089bc41d9b3bba00056daf140da4676ffc95","timestamp":1710940894}
+{"data":"Block 1 Data","hash":"340a8f90b66234aef87acb9d04fdeb48c2a883867818f4c67b3ad62378a43e6d","index":1,"prev_block_hash":"428e07de0128df162bde8eaeb638693fc63dff99e44b282b4546e718ad532195","timestamp":1710940938}
+{"data":"Block 1 Data","hash":"4349bdf1142c07754f81c6964b48fcd90180d1e42e94e0741907e6f8c114d47e","index":1,"prev_block_hash":"d679ba1cc9cc5ee93ecb37bce47ff48388ff8886be2b236fc3b18a50a55f325c","timestamp":1710940953}

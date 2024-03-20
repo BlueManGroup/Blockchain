@@ -65,5 +65,4 @@ impl Blockchain {
         self.chain.push(new_block);
     }
 
-    // Add more methods as needed, such as validating the chain, adding authorities, etc.
 }   

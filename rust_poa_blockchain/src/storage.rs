@@ -3,6 +3,25 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use crate::block::Block;
 
+struct FileTracker {
+    cur_election: u16,
+    cur_enum: u16,
+    cur_block: u32
+} 
+
+impl FileTracker{
+    pub fn new(election: u16) -> Self {
+        let mut file_tracker = FileTracker {
+            cur_election: election,
+            cur_enum: 0,
+            cur_block: 0
+        };
+
+        file_tracker
+    }
+
+} 
+
 // location til q
 // 
 pub fn append_blocks_to_file(blocks: &[&Block]) -> std::io::Result<()> {
