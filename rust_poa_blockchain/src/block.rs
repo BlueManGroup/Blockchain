@@ -5,7 +5,7 @@ use crate::storage;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Block {
-    index: u64,
+    pub index: u64,
     timestamp: i64,
     prev_block_hash: String,
     hash: String,

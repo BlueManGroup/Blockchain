@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.35"
 file = "1.1.2"
+fs = "0.0.5"
+glob = "0.3.1"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.114"
 sha2 = "0.10.8"

@@ -10,5 +10,5 @@ fn main() {
     // Attempt to add a block
     blockchain.add_block("Block 1 Data".to_string(), "Authority1".to_string());
     
-    println!("{:#?}", blockchain);
+    //println!("{:#?}", blockchain);
 }
