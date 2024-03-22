@@ -37,6 +37,7 @@ impl Block {
 pub struct Blockchain {
     chain: Vec<Block>,
     pub authorities: Vec<String>, // Public keys or identifiers of authorized nodes
+    file_tracker: storage::FileTracker
 }
 
 impl Blockchain {
@@ -45,6 +46,7 @@ impl Blockchain {
         Blockchain {
             chain: vec![genesis_block],
             authorities: Vec::new(), // Initialize with known authorities
+            file_tracker: storage::FileTracker::new(1, String::from("blocks"))
         }
     }
 
@@ -61,8 +63,11 @@ impl Blockchain {
             prev_block.hash.clone(),
             data,
         );
-        storage::append_blocks_to_file(&[&new_block]);
-        self.chain.push(new_block);
-    }
+        self.file_tracker.cur_block = self.file_tracker.find_file();
 
+        storage::append_blocks_to_file(&[&new_block], self.file_tracker.cur_election, self.file_tracker.cur_enum);
+        self.chain.push(new_block);
+        self.file_tracker.cur_block += 1 ;
+        println!("{}", self.file_tracker.cur_block);
+    }
 }   
