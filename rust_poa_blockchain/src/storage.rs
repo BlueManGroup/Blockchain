@@ -4,6 +4,7 @@ use std::io::prelude::*;
 use glob::glob;
 use std::fs::File;
 use crate::block::Block;
+use std::fs;
 
 struct FileTracker {
     cur_election: u16,
@@ -58,22 +59,29 @@ impl FileTracker{
   
 } 
 
+// create a new file. do so when current file too big
+pub fn create_new_file(file_tracker: &FileTracker) -> std::io::Result<()> {
+    let file = format!("{}/e{}f{}", file_tracker.path, file_tracker.cur_election, file_tracker.cur_enum);
+    //File::create(file_tracker.path);
+    Ok(())
+}
+
 // location til q
 // 
 pub fn append_blocks_to_file(blocks: &[&Block]) -> std::io::Result<()> {
     let file_tracker = FileTracker::new(1, String::from("blocks"));
     file_tracker.find_file();
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(format!("blocks/e{}f{}", file_tracker.cur_election, file_tracker.cur_enum))?;
-    
+    let file_path = format!("blocks/e{}f{}", file_tracker.cur_election, file_tracker.cur_enum);
+    let mut file = File::create(&file_path)?;
+
     for block in blocks {
         let serialized_block = json!(block).to_string();
         file.write_all(serialized_block.as_bytes())?;
-        file.write_all(b"\n")?; 
-        
+        file.write_all(b"\n")?;
     }
+    file.sync_all()?;
+    //if (file.metadata().unwrap().len() >= )
+    println!("size: {}", file.metadata().unwrap().len());
     Ok(())
 }
