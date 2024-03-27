@@ -3,7 +3,7 @@ use chrono::prelude::*;
 use serde::{Serialize, Deserialize};
 use crate::storage;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug,Clone)]
 pub struct Block {
     pub index: u64,
     timestamp: i64,
@@ -13,6 +13,7 @@ pub struct Block {
 }
 
 impl Block {
+    
     pub fn new(index: u64, timestamp: i64, prev_block_hash: String, data: String) -> Self {
         let mut block = Block {
             index,
@@ -35,21 +36,38 @@ impl Block {
 }
 #[derive(Debug)]
 pub struct Blockchain {
-    chain: Vec<Block>,
+    pub chain: Vec<Block>,
     pub authorities: Vec<String>, // Public keys or identifiers of authorized nodes
     file_tracker: storage::FileTracker
 }
 
+/// Represents a blockchain.
 impl Blockchain {
+    /// Creates a new instance of the blockchain.
+    ///
+    /// # Returns
+    ///
+    /// A new instance of the blockchain.
     pub fn new() -> Self {
         let genesis_block = Block::new(0, Utc::now().timestamp(), String::new(), "Genesis Block".to_string());
-        Blockchain {
-            chain: vec![genesis_block],
+            
+        let mut blockchain = Blockchain {
+            chain: vec![genesis_block.clone()], // clone the genesis block to keep it in memory
             authorities: Vec::new(), // Initialize with known authorities
             file_tracker: storage::FileTracker::new(1, String::from("blocks"))
-        }
+        };
+
+        storage::append_blocks_to_file(&[&genesis_block], blockchain.file_tracker.cur_election, blockchain.file_tracker.cur_enum);
+
+        blockchain
     }
 
+    /// Adds a new block to the blockchain.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The data to be stored in the new block.
+    /// * `authority` - The authority responsible for adding the block.
     pub fn add_block(&mut self, data: String, authority: String) {
         if !self.authorities.contains(&authority) {
             println!("Authority not recognized.");
@@ -70,4 +88,29 @@ impl Blockchain {
         self.file_tracker.cur_block += 1 ;
         println!("{}", self.file_tracker.cur_block);
     }
-}   
+
+    
+    /// Checks if a given block in the blockchain is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `block` - The block to be checked.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the block is valid, `false` otherwise.
+    pub fn is_block_valid(&self, index: usize) -> bool {
+        let block = &self.chain[index];
+        let prev_block_index = block.index - 1;
+        if prev_block_index < 0 {
+            // Genesis block, always valid
+            return true;
+        }
+
+        let prev_block = &self.chain[prev_block_index as usize];
+        let prev_block_hash = prev_block.hash.clone();
+        let calculated_prev_block_hash = prev_block.calculate_hash();
+
+        block.prev_block_hash == prev_block_hash && prev_block_hash == calculated_prev_block_hash 
+    } 
+}
