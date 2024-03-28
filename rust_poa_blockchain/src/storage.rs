@@ -4,9 +4,8 @@ use std::io::prelude::*;
 use glob::glob;
 use std::fs::File;
 use crate::block::Block;
-use std::fs;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileTracker {
     pub cur_election: u16,
     pub cur_enum: u16,
@@ -16,27 +15,31 @@ pub struct FileTracker {
 
 impl FileTracker{
     pub fn new(election: u16, path: String) -> Self {
-        let mut file_tracker = FileTracker {
+        let file_tracker = FileTracker {
             cur_election: election,
             cur_enum: 1,
             cur_block: 0,
             path: path
         };
-
-        file_tracker
+    file_tracker
 
     }
 
-    pub fn find_file(&self) -> u64 {
+    pub fn set_enum(&mut self, new_value: u16) {
+        self.cur_enum = new_value;
+    }
+
+    pub fn find_file(&mut self) {
         let pattern = format!("{}/e{}f*", self.path, self.cur_election);
         let greatest = glob(&pattern)
             .expect("poopie")
             .filter_map(Result::ok) 
             .filter_map(|entry| entry.file_name().map(|name| name.to_string_lossy().to_string()))
-            .filter_map(|name| name.strip_prefix(&format!("e{}f", self.cur_election)).map(|stripped| stripped.parse::<u32>().ok()).flatten())
+            .filter_map(|name| name.strip_prefix(&format!("e{}f", self.cur_election)).map(|stripped| stripped.parse::<u16>().ok()).flatten())
             .max();
 
         if let Some(greatest_number) = greatest {
+            self.set_enum(greatest_number);
             let filename = format!("{}/e{}f{}", self.path, self.cur_election, greatest_number);
             println!("{}", filename);
             let file_contents = std::fs::read_to_string(&filename)
@@ -55,7 +58,8 @@ impl FileTracker{
                     eprintln!("Error parsing JSON: {}", line);
                 }
             }
-            return biggest;
+            self.cur_block = biggest + 1;
+            return;
         } else {
             eprintln!("No files found matching the pattern");
         }
@@ -66,27 +70,44 @@ impl FileTracker{
 } 
 
 // create a new file. do so when current file too big
-pub fn create_new_file(file_tracker: &FileTracker) -> std::io::Result<()> {
-    let file = format!("{}/e{}f{}", file_tracker.path, file_tracker.cur_election, file_tracker.cur_enum);
-    //File::create(file_tracker.path);
-    Ok(())
-}
+// pub fn create_new_file(mut file_tracker: FileTracker) -> std::io::Result<()> {
+//     file_tracker.cur_enum += 1;
+//     let file = format!("{}/e{}f{}", file_tracker.path, file_tracker.cur_election, file_tracker.cur_enum);
+//     File::create(file_tracker.path);
+//     println!("shit: {}\npoop:{}", file, file_tracker.cur_enum);
+//     Ok(())
+// }
 
 // location til q
-// 
-pub fn append_blocks_to_file(blocks: &[&Block], cur_election: u16, cur_enum: u16) -> std::io::Result<()> {
+
+pub fn append_blocks_to_file(blocks: &[&Block], file_tracker: &mut FileTracker) -> std::io::Result<()> {
 
 
-    let file_path = format!("blocks/e{}f{}", file_tracker.cur_election, file_tracker.cur_enum);
-    let mut file = File::create(&file_path)?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(format!("blocks/e{}f{}", file_tracker.cur_election, file_tracker.cur_enum))?;
+
+    let mut file_len = file.metadata().unwrap().len();
+    // fix at some point i guess
+    if (file_len) > 1280000 {
+        file_tracker.set_enum(file_tracker.cur_enum + 1);
+        let path = format!("{}/e{}f{}", file_tracker.path, file_tracker.cur_election, file_tracker.cur_enum);
+        file = OpenOptions::new().create(true).append(true).open(path)?;
+        println!("enum tracker: {}", file_tracker.cur_enum);
+        file_len = file.metadata().unwrap().len();
+    }
+    
 
     for block in blocks {
         let serialized_block = json!(block).to_string();
         file.write_all(serialized_block.as_bytes())?;
-        file.write_all(b"\n")?;
+        file.write_all(b"\n")?; 
+        
     }
-    file.sync_all()?;
-    //if (file.metadata().unwrap().len() >= )
-    println!("size: {}", file.metadata().unwrap().len());
+
+    file.sync_all();
+    println!("file size:{}",file_len);
+
     Ok(())
 }

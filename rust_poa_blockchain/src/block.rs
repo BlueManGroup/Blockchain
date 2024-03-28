@@ -43,10 +43,11 @@ pub struct Blockchain {
 impl Blockchain {
     pub fn new() -> Self {
         let genesis_block = Block::new(0, Utc::now().timestamp(), String::new(), "Genesis Block".to_string());
+        let file_tracker = storage::FileTracker::new(1, String::from("blocks"));
         Blockchain {
             chain: vec![genesis_block],
             authorities: Vec::new(), // Initialize with known authorities
-            file_tracker: storage::FileTracker::new(1, String::from("blocks"))
+            file_tracker: file_tracker
         }
     }
 
@@ -56,18 +57,22 @@ impl Blockchain {
             return;
         }
 
+        self.file_tracker.find_file();
+        println!("current block: {}", self.file_tracker.cur_block);
+
         let prev_block = &self.chain[self.chain.len() - 1];
         let new_block = Block::new(
-            self.chain.len() as u64,
+            self.file_tracker.cur_block,
             Utc::now().timestamp(),
             prev_block.hash.clone(),
             data,
         );
-        self.file_tracker.cur_block = self.file_tracker.find_file();
+        
 
-        storage::append_blocks_to_file(&[&new_block], self.file_tracker.cur_election, self.file_tracker.cur_enum);
+        storage::append_blocks_to_file(&[&new_block], &mut self.file_tracker);
         self.chain.push(new_block);
+        println!("tracker in blocks after increment: {}", self.file_tracker.cur_enum);
         self.file_tracker.cur_block += 1 ;
-        println!("{}", self.file_tracker.cur_block);
+        println!("cur_block: {}", self.file_tracker.cur_block);
     }
 }   
