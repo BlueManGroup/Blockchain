@@ -2,36 +2,46 @@ use futures::prelude::*;
 use libp2p::{ping, Multiaddr};
 use libp2p::swarm::SwarmEvent;
 use std::error::Error;
+use std::string;
 use std::time::Duration;
 use tracing_subscriber::EnvFilter;
-use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic};
+use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic, FloodsubMessage};
 use libp2p::identity;
 use libp2p::identity::Keypair;
 use libp2p::PeerId;
+mod p2p;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    
 
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
     
-    let local_key = Keypair::generate_ed25519();
-    let floodsub_topic: Topic = Topic::new("blockchain".to_string());
+    let identity_keys = Keypair::generate_ed25519();
+    let local_peer_id = PeerId::from(identity_keys.public());
     
-        let mut swarm = libp2p::SwarmBuilder::with_new_identity()
+
+    // Create the behaviour
+    let behaviour = p2p::Behaviour::new(local_peer_id.clone()).expect("Failed to create behaviour");
+
+    
+    let mut swarm = libp2p::SwarmBuilder::with_new_identity()
         .with_async_std()
         .with_tcp(
             libp2p::tcp::Config::default(),
             libp2p::tls::Config::new,
             libp2p::yamux::Config::default,
         )?
-        .with_behaviour(|_| ping::Behaviour::default())?
-        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
+        .with_behaviour(|_| behaviour).unwrap()
+        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
         .build();
 
 
-    swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+    // Start listening on a random TCP port
+    let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().expect("Failed to parse listen address");
+    libp2p::Swarm::listen_on(&mut swarm, listen_addr).expect("Failed to listen on address");
 
     if let Some(addr) = std::env::args().nth(1) {
         let remote: Multiaddr = addr.parse()?;
@@ -39,15 +49,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("Dialed {addr}")
     }
 
+    let floodsub_topic: Topic = Topic::new("blockchain".to_string());
+    swarm.behaviour_mut().floodsub.subscribe(floodsub_topic.clone());
 
     loop {
         match swarm.select_next_some().await {
             SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
-            SwarmEvent::Behaviour(event) => println!("{event:?}"),
+            SwarmEvent::Behaviour(p2p:Behaviour::Identify(event)) => {
+                println!("identify: {event:?}");
+            },
+            SwarmEvent::Behaviour(p2p::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
+
+                println!("Received: '{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
+            }
             _ => {}
         }
+
+        swarm.behaviour_mut().floodsub.publish_any(floodsub_topic.clone(), "Hello World".as_bytes());
+        println!("line 1");
     }
-    
+println!("line 2");
+
+
+
 
     //     loop for testing blockchain locally
     //     println!("Please choose an option:");
