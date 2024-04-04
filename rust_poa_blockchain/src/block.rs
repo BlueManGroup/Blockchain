@@ -90,7 +90,7 @@ impl Blockchain {
     }
 
     
-    /// Checks if a given block in the blockchain is valid.
+    /// Checks if a given block in the blockchain is valid. needs to be rewritten to check blocks not yet on the chain
     ///
     /// # Arguments
     ///
