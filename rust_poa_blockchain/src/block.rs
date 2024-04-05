@@ -78,7 +78,7 @@ impl Blockchain {
         let prev_block = &self.chain[self.chain.len() - 1];
         let new_block = Block::new(
             self.chain.len() as u64,
-            Utc::now().timestamp(),
+            Utc::timestamp.now(),
             prev_block.hash.clone(),
             data,
         );

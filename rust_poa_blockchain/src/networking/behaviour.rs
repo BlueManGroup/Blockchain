@@ -19,9 +19,10 @@ impl Behaviour {
         let floodsub = Floodsub::new(local_peer_id.clone());
         let identify = identify::Behaviour::new(identify::Config::new("1.0".into(), local_public_key));
         Ok(Self {identify, floodsub})
+
+
     }
 }
-
 // fn main() {
 //     // Generate a new identity keypair
 //     let identity_keys = identity::Keypair::generate_ed25519();

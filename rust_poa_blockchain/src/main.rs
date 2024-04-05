@@ -9,91 +9,110 @@ use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic, FloodsubMessage};
 use libp2p::identity;
 use libp2p::identity::Keypair;
 use libp2p::PeerId;
-mod p2p;
+mod networking;
+use std::thread;
+
 
 #[async_std::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() {
     
 
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
+
+    let mut p2p = networking::p2p::P2p::new();
+    async_std::task::spawn(async move {p2p.p2phandler().await;});
+    async_std::task::spawn(async move {
+        loop {
+            println!("main erduoppe grøn emoji");
+            async_std::task::sleep(Duration::from_secs(1)).await;
+        }
+    });
     
-    let identity_keys = Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(identity_keys.public());
-    
-
-    // Create the behaviour
-    let behaviour = p2p::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
-
-    
-    let mut swarm = libp2p::SwarmBuilder::with_new_identity()
-        .with_async_std()
-        .with_tcp(
-            libp2p::tcp::Config::default(),
-            libp2p::tls::Config::new,
-            libp2p::yamux::Config::default,
-        )?
-        .with_behaviour(|_| behaviour).unwrap()
-        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
-        .build();
-
-
-    // Start listening on a random TCP port
-    let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().expect("Failed to parse listen address");
-    libp2p::Swarm::listen_on(&mut swarm, listen_addr).expect("Failed to listen on address");
-
-    if let Some(addr) = std::env::args().nth(1) {
-        let remote: Multiaddr = addr.parse()?;
-        swarm.dial(remote)?;
-        println!("Dialed {addr}")
-    }
-
-    let floodsub_topic: Topic = Topic::new("blockchain".to_string());
-    println!("topic created: {}", floodsub_topic.id());
-    swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
-    println!("successfully subscribed: {}", swarm.behaviour_mut().floodsub.subscribe(floodsub_topic.clone()));
-    println!("should have published now"); 
 
     loop {
-        match swarm.select_next_some().await {
-            SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
-            SwarmEvent::Behaviour(p2p::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
-                println!("message received");
-                println!("Received: '{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
-            },
-            SwarmEvent::Behaviour(p2p::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
+        async_std::task::sleep(Duration::from_secs(1)).await;
+    }
+    // let identity_keys = Keypair::generate_ed25519();
+    // let local_peer_id = PeerId::from(identity_keys.public());
+    
 
-                println!("Peer {:?} subscribed to '{:?}'", &peer_id, &topic);
-            },
-            SwarmEvent::Behaviour(p2p::BehaviourEvent::Identify(event)) => {
+    // // Create the behaviour
+    // let behaviour = networking::behaviour::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
+
+    
+    // let mut swarm = libp2p::SwarmBuilder::with_new_identity()
+    //     .with_async_std()
+    //     .with_tcp(
+    //         libp2p::tcp::Config::default(),
+    //         libp2p::tls::Config::new,
+    //         libp2p::yamux::Config::default,
+    //     )?
+    //     .with_behaviour(|_| behaviour).unwrap()
+    //     .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
+    //     .build();
+
+
+    // // Start listening on a random TCP port
+    // let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().expect("Failed to parse listen address");
+    // libp2p::Swarm::listen_on(&mut swarm, listen_addr).expect("Failed to listen on address");
+
+    // if let Some(addr) = std::env::args().nth(1) {
+    //     let remote: Multiaddr = addr.parse()?;
+    //     swarm.dial(remote)?;
+    //     println!("Dialed {addr}")
+    // }
+
+    // let floodsub_topic: Topic = Topic::new("blockchain".to_string());
+    // println!("topic created: {}", floodsub_topic.id());
+    // swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
+    // println!("successfully subscribed: {}", swarm.behaviour_mut().floodsub.subscribe(floodsub_topic.clone()));
+    // println!("should have published now"); 
+
+    // loop {
+    //     match swarm.select_next_some().await {
+    //         SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
+    //         SwarmEvent::Behaviour(networking::behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
+    //             println!("message received");
+    //             println!("Received: '{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
+    //         },
+    //         SwarmEvent::Behaviour(networking::behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
+
+    //             println!("Peer {:?} subscribed to '{:?}'", &peer_id, &topic);
+    //         },
+    //         SwarmEvent::Behaviour(networking::behaviour::BehaviourEvent::Identify(event)) => {
             
-                match event {
-                    libp2p::identify::Event::Received {info, peer_id} => {
-                        println!("Received: {:?} from {:?}", info, peer_id);
-                        swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
-                        let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
-                        swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), message_str);
+    //             match event {
+    //                 libp2p::identify::Event::Received {info, peer_id} => {
+    //                     println!("Received: {:?} from {:?}", info, peer_id);
+    //                     swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
+    //                     let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
+    //                     swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), message_str);
 
-                    },
-                    libp2p::identify::Event::Sent {peer_id} => {
-                        println!("Sent: {:?}", peer_id);
-                    },
-                    libp2p::identify::Event::Pushed {info, peer_id} => {
-                     println!("Pushed: {:?} from {:?}", info, peer_id )   
-                    },
-                    libp2p::identify::Event::Error { peer_id, error } => {
-                        println!("Error: {:?} from {:?}", error, peer_id);
-                    },
-                };
+    //                 },
+    //                 libp2p::identify::Event::Sent {peer_id} => {
+    //                     println!("Sent: {:?}", peer_id);
+    //                 },
+    //                 libp2p::identify::Event::Pushed {info, peer_id} => {
+    //                  println!("Pushed: {:?} from {:?}", info, peer_id )   
+    //                 },
+    //                 libp2p::identify::Event::Error { peer_id, error } => {
+    //                     println!("Error: {:?} from {:?}", error, peer_id);
+    //                 },
+    //             };
                  
-                // swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
-            },
-            _ => {}
-        }
+    //             // swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
+    //         },
+    //         _ => {}
+    //     }
         // swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), "Hello World".as_bytes());
         // println!("line 1");
-    }
+}
+
+
+
+
 
     //     loop for testing blockchain locally
     //     println!("Please choose an option:");
@@ -140,4 +159,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //             println!("Invalid option. Please enter a number between 1 and 3.");
     //         },
     //     }
-}
+//  }
+
+
+
+
+    
