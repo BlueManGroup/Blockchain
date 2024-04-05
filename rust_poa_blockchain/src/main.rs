@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     
 
     // Create the behaviour
-    let behaviour = p2p::Behaviour::new(identity_keys.public()).expect("Failed to create behaviour");
+    let behaviour = p2p::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
 
     
     let mut swarm = libp2p::SwarmBuilder::with_new_identity()
@@ -50,28 +50,50 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let floodsub_topic: Topic = Topic::new("blockchain".to_string());
-    swarm.behaviour_mut().floodsub.subscribe(floodsub_topic.clone());
+    println!("topic created: {}", floodsub_topic.id());
+    swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
+    println!("successfully subscribed: {}", swarm.behaviour_mut().floodsub.subscribe(floodsub_topic.clone()));
+    println!("should have published now"); 
 
     loop {
         match swarm.select_next_some().await {
             SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
-            SwarmEvent::Behaviour(p2p::Behaviour::Identify(event)) => {
-                println!("identify: {event:?}");
-            },
             SwarmEvent::Behaviour(p2p::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
-
+                println!("message received");
                 println!("Received: '{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
-            }
+            },
+            SwarmEvent::Behaviour(p2p::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
+
+                println!("Peer {:?} subscribed to '{:?}'", &peer_id, &topic);
+            },
+            SwarmEvent::Behaviour(p2p::BehaviourEvent::Identify(event)) => {
+            
+                match event {
+                    libp2p::identify::Event::Received {info, peer_id} => {
+                        println!("Received: {:?} from {:?}", info, peer_id);
+                        swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
+                        let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
+                        swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), message_str);
+
+                    },
+                    libp2p::identify::Event::Sent {peer_id} => {
+                        println!("Sent: {:?}", peer_id);
+                    },
+                    libp2p::identify::Event::Pushed {info, peer_id} => {
+                     println!("Pushed: {:?} from {:?}", info, peer_id )   
+                    },
+                    libp2p::identify::Event::Error { peer_id, error } => {
+                        println!("Error: {:?} from {:?}", error, peer_id);
+                    },
+                };
+                 
+                // swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
+            },
             _ => {}
         }
-
-        swarm.behaviour_mut().floodsub.publish_any(floodsub_topic.clone(), "Hello World".as_bytes());
-        println!("line 1");
+        // swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), "Hello World".as_bytes());
+        // println!("line 1");
     }
-    println!("line 2");
-
-
-
 
     //     loop for testing blockchain locally
     //     println!("Please choose an option:");
