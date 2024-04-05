@@ -4,20 +4,21 @@ use libp2p::{
     mdns::Config,
     SwarmBuilder,
     swarm::{Swarm, NetworkBehaviour},
-    PeerId, Multiaddr, identify,
+    PeerId, Multiaddr, identify, 
 };
+use libp2p::libp2p_identity::{PublicKey};
 
 #[derive(NetworkBehaviour)]
 pub struct Behaviour {
     pub floodsub: Floodsub,
     pub identify: identify::Behaviour,
-}
+} 
 
 impl Behaviour {
-    pub fn new(local_peer_id: PeerId) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(local_public_key: PublicKey) -> Result<Self, Box<dyn std::error::Error>> {
         let floodsub = Floodsub::new(local_peer_id.clone());
-        let identify = identify::Behaviour::new(identify::Config::new("1.0".into(),local_peer_id.clone()));
-        Ok(Self { floodsub})
+        let identify = identify::Behaviour::new(identify::Config::new("1.0".into(), local_public_key));
+        Ok(Self {identify, floodsub})
     }
 }
 

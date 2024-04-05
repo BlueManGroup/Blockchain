@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     
 
     // Create the behaviour
-    let behaviour = p2p::Behaviour::new(local_peer_id.clone()).expect("Failed to create behaviour");
+    let behaviour = p2p::Behaviour::new(identity_keys.public()).expect("Failed to create behaviour");
 
     
     let mut swarm = libp2p::SwarmBuilder::with_new_identity()
@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
         match swarm.select_next_some().await {
             SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
-            SwarmEvent::Behaviour(p2p:Behaviour::Identify(event)) => {
+            SwarmEvent::Behaviour(p2p::Behaviour::Identify(event)) => {
                 println!("identify: {event:?}");
             },
             SwarmEvent::Behaviour(p2p::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         swarm.behaviour_mut().floodsub.publish_any(floodsub_topic.clone(), "Hello World".as_bytes());
         println!("line 1");
     }
-println!("line 2");
+    println!("line 2");
 
 
 
