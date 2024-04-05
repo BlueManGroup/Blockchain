@@ -3,6 +3,7 @@ use chrono::prelude::*;
 use serde::{Serialize, Deserialize};
 use crate::storage;
 
+
 #[derive(Serialize, Deserialize, Debug,Clone)]
 pub struct Block {
     pub index: u64,
@@ -90,7 +91,7 @@ impl Blockchain {
     }
 
     
-    /// Checks if a given block in the blockchain is valid.
+    /// Checks if a given block in the blockchain is valid. needs to be rewritten to check blocks not yet on the chain
     ///
     /// # Arguments
     ///
@@ -100,13 +101,12 @@ impl Blockchain {
     ///
     /// `true` if the block is valid, `false` otherwise.
     pub fn is_block_valid(&self, index: usize) -> bool {
-        let block = &self.chain[index];
-        let prev_block_index = block.index - 1;
-        if prev_block_index < 0 {
-            // Genesis block, always valid
-            return true;
+        if index == 0 {
+            return true; // Genesis block is always valid
         }
 
+        let block = &self.chain[index];
+        let prev_block_index = block.index - 1;
         let prev_block = &self.chain[prev_block_index as usize];
         let prev_block_hash = prev_block.hash.clone();
         let calculated_prev_block_hash = prev_block.calculate_hash();
