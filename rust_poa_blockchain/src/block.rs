@@ -1,6 +1,7 @@
 use sha2::{Sha256, Digest};
 use chrono::prelude::*;
 use serde::{Serialize, Deserialize};
+use std::sync::mpsc;
 use crate::storage;
 
 
@@ -39,7 +40,8 @@ impl Block {
 pub struct Blockchain {
     pub chain: Vec<Block>,
     pub authorities: Vec<String>, // Public keys or identifiers of authorized nodes
-    file_tracker: storage::FileTracker
+    file_tracker: storage::FileTracker,
+    pub msg_queue: mpsc::Receiver<String>
 }
 
 /// Represents a blockchain.
@@ -49,16 +51,17 @@ impl Blockchain {
     /// # Returns
     ///
     /// A new instance of the blockchain.
-    pub fn new() -> Self {
+    pub fn new(msg_queue: mpsc::Receiver<String>) -> Self {
         let genesis_block = Block::new(0, Utc::now().timestamp(), String::new(), "Genesis Block".to_string());
             
-        let mut blockchain = Blockchain {
+        let blockchain = Blockchain {
             chain: vec![genesis_block.clone()], // clone the genesis block to keep it in memory
             authorities: Vec::new(), // Initialize with known authorities
-            file_tracker: storage::FileTracker::new(1, String::from("blocks"))
+            file_tracker: storage::FileTracker::new(1, String::from("blocks")),
+            msg_queue,
         };
 
-        storage::append_blocks_to_file(&[&genesis_block], blockchain.file_tracker.cur_election, blockchain.file_tracker.cur_enum);
+        storage::append_blocks_to_file(&[&genesis_block], blockchain.file_tracker.cur_election, blockchain.file_tracker.cur_enum).expect("fjerner warning");
 
         blockchain
     }
@@ -69,22 +72,23 @@ impl Blockchain {
     ///
     /// * `data` - The data to be stored in the new block.
     /// * `authority` - The authority responsible for adding the block.
-    pub fn add_block(&mut self, data: String, authority: String) {
-        if !self.authorities.contains(&authority) {
-            println!("Authority not recognized.");
-            return;
-        }
+    /// HUSK AT TAGE TILBAGE TIL STRING PÅ AUTH (FJERNET FOR TESTING PURPOSES)
+    pub fn add_block(&mut self, data: String, authority: i32) {
+        // if !self.authorities.contains(&authority) {
+        //     println!("Authority not recognized.");
+        //     return;
+        // }
 
         let prev_block = &self.chain[self.chain.len() - 1];
         let new_block = Block::new(
             self.chain.len() as u64,
-            Utc::timestamp.now(),
+            Utc::now().timestamp(),
             prev_block.hash.clone(),
             data,
         );
         self.file_tracker.cur_block = self.file_tracker.find_file();
 
-        storage::append_blocks_to_file(&[&new_block], self.file_tracker.cur_election, self.file_tracker.cur_enum);
+        storage::append_blocks_to_file(&[&new_block], self.file_tracker.cur_election, self.file_tracker.cur_enum).expect("jeg har bare sat dette ind for at fjerne warning tbh");
         self.chain.push(new_block);
         self.file_tracker.cur_block += 1 ;
         println!("{}", self.file_tracker.cur_block);
@@ -113,4 +117,13 @@ impl Blockchain {
 
         block.prev_block_hash == prev_block_hash && prev_block_hash == calculated_prev_block_hash 
     } 
+
+    pub fn check_queue(&mut self) {
+        loop {
+            if let Ok(received) = self.msg_queue.try_recv() {
+                let auth = 1;
+                self.add_block(received, auth);
+            }
+        }
+    }
 }

@@ -1,10 +1,7 @@
 use libp2p::{
-    floodsub::{Floodsub, FloodsubEvent, Topic},
-    mdns::async_io,
-    mdns::Config,
-    SwarmBuilder,
-    swarm::{Swarm, NetworkBehaviour},
-    PeerId, Multiaddr, identify, 
+    floodsub::Floodsub,
+    swarm::NetworkBehaviour,
+    PeerId, identify, 
 };
 use libp2p_identity::PublicKey;
 

@@ -1,8 +1,7 @@
-use serde_json::{json};
+use serde_json::json;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use glob::glob;
-use std::fs::File;
 use crate::block::Block;
 
 #[derive(Debug)]
@@ -15,7 +14,7 @@ pub struct FileTracker {
 
 impl FileTracker{
     pub fn new(election: u16, path: String) -> Self {
-        let mut file_tracker = FileTracker {
+        let file_tracker = FileTracker {
             cur_election: election,
             cur_enum: 1,
             cur_block: 0,
