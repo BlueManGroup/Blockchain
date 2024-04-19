@@ -1,12 +1,12 @@
 use std::env;
-use crate::block;
+use crate::{block, networking};
 use std::sync::mpsc;
 use pqcrypto_dilithium::dilithium3;
 use pqcrypto_traits::sign::{PublicKey,SecretKey};
 use base64::{engine::general_purpose, Engine};
 use std::collections::HashMap;
 use sha2::{Sha256, Digest};
-//Kyber Keygen crate goes here
+
 
 pub struct Payload {
     pub block: block::Block,
@@ -49,12 +49,15 @@ pub struct Node {
    // pub node_list: // array med strings(?)
     pub blockchain: block::Blockchain,
     pub name: String,
-    pub known_nodes: HashMap<String, String>
+    pub p2p: networking::p2p::P2p,
+    
 
 }
 
 impl Node {
-    pub fn new(msg_queue: mpsc::Receiver<String>) -> Self {
+    pub fn new(msg_rx: mpsc::Receiver<String>, msg_tx: mpsc::Sender<String> ) -> Self {
+
+        
         // good for PoC, maybe bad for production
         let secretkey: dilithium3::SecretKey;
         let publickey: dilithium3::PublicKey;
@@ -74,20 +77,24 @@ impl Node {
             env::set_var("PUBLICKEY", general_purpose::STANDARD.encode(publickey_bytes));
         }
 
-        let blockchain = block::Blockchain::new(msg_queue);
-        let known_nodes = HashMap::new();
+
+        let blockchain = block::Blockchain::new(msg_rx);
+
+        //create p2p network
+        let mut p2p = networking::p2p::P2p::new(msg_tx);
+
+        //return object
         let node = Node {
-            // authkey,
             secretkey,
             publickey,
             blockchain,
             name: String::from("Node"),
-            known_nodes
+            p2p 
         };
         node
     }
 
-    pub fn create_payload(&self, block: block::Block) -> Payload {
+    pub fn create_block_payload(&self, block: block::Block) -> Payload {
         let mut payload_msg = Vec::new();
         payload_msg.extend_from_slice(block.to_bytes().as_slice());
         payload_msg.extend_from_slice(self.name.as_bytes());
@@ -102,9 +109,18 @@ impl Node {
             
     // }
 
-    pub fn push_payload(payload: Payload) -> std::io::Result<()> {
-        //self.blockchain.
+    pub fn send_block_to_validator(&self, payload: Payload, dest: String) -> std::io::Result<()> {
+        
+        self.p2p.known_nodes.get(&dest);
+        //self.p2p.swarm.dial
+        
         // BLOCK CREATOR BURDE MÅSKE CHECKE OM BLOCKEN ER SOM DET SKAL VÆRE INDEN DEN BLIVER SENDT TIL RESTEN AF NETVÆRKET
+        // ^ikke helt enig længere, vi burde i stedet checke hos alle at hashet med blocken stemmer overens med hvad der står i signature
+        // det kan måske give for meget delay, hvis creator giver en good for alle blocks de har created (ift hvad der sendes, ikke samlet 
+        // needed processing). dertil kan receiving nodes heller ikke checke for dem selv hvorvidt en block er good (kan de godt hvis begge
+        // gøre, men det vil være endnu mere processing power needed)
+        
+
         Ok(())
     }
 }

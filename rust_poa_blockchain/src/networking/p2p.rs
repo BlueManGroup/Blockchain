@@ -2,12 +2,14 @@ use futures::prelude::*;
 use libp2p::Multiaddr;
 use libp2p::swarm::SwarmEvent;
 use libp2p::swarm::Swarm;
+use std::collections::HashMap;
 use std::time::Duration;
 use libp2p::floodsub::{FloodsubEvent, Topic};
 use libp2p::identity;
 use libp2p::identity::Keypair;
 use libp2p::PeerId; 
 use std::sync::mpsc::Sender; 
+use std::env;
 use crate::networking::behaviour;
 
 
@@ -19,17 +21,27 @@ pub struct P2p {
     pub identity_keys: identity::Keypair,
     pub listen_addr: Multiaddr,
     pub floodsub_topic: Topic,
+    pub known_nodes: HashMap<String, String>,
     pub msg_queue: Sender<String>,
 }
 
 impl P2p{
     pub fn new(msg_queue: Sender<String>) -> Self {
         let identity_keys= Keypair::generate_ed25519();
-        let local_peer_id = PeerId::from(identity_keys.public());
+
+        if env::var("PEER_ID").is_err() {
+            env::set_var("PEER_ID", PeerId::from(identity_keys.public()).to_string());
+        }
+
+        let local_peer_id = PeerId::from_bytes(env::var("PEER_ID").unwrap().as_bytes());
+
+
         let behaviour = behaviour::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
         let behaviour2 = behaviour::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
         let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().expect("Failed to parse listen address");
         let floodsub_topic: Topic = Topic::new("blockchain".to_string());
+        let known_nodes = HashMap::new();
+
         let mut swarm = libp2p::SwarmBuilder::with_existing_identity(identity_keys.clone())
             .with_async_std()
             .with_tcp(
@@ -49,6 +61,7 @@ impl P2p{
             identity_keys,
             listen_addr,
             floodsub_topic,
+            known_nodes,
             msg_queue,
         };
         p2p
@@ -84,6 +97,8 @@ impl P2p{
                         libp2p::identify::Event::Received {info, peer_id} => {
                             println!("Received: {:?} from {:?}", info, peer_id);
                             self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
+                            self.known_nodes.insert(peer_id.clone().to_string(), info.agent_version);
+
                             let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
                             self.swarm.behaviour_mut().floodsub.publish_any(self.floodsub_topic.clone(), message_str);
 

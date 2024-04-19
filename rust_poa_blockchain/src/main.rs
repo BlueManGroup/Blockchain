@@ -9,7 +9,9 @@ mod node;
 
 #[async_std::main]
 async fn main() {
-    let (tx, rx) = mpsc::channel(); 
+    let (tx, rx) = mpsc::channel();
+
+    let mut node = node::Node::new(rx,tx);
 
     // Fetch keypair from Env variable - if not present, generate a new keypair
 
@@ -17,8 +19,7 @@ async fn main() {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    let mut p2p = networking::p2p::P2p::new(tx);
-    async_std::task::spawn(async move {p2p.p2phandler().await;});
+    async_std::task::spawn(async move {node.p2p.p2phandler().await;});
     async_std::task::spawn(async move {
         loop {
             //MAIN LOOP GOES HERE
@@ -34,7 +35,8 @@ async fn main() {
         }  
     });
     
-    let mut node = node::Node::new(rx);
+    
+    
     // let mut blockchain = block::Blockchain::new(rx);
     async_std::task::spawn(async move {node.blockchain.check_queue();});
     
