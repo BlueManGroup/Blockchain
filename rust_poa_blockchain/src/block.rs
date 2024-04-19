@@ -35,7 +35,18 @@ impl Block {
         let hash = hasher.finalize();
         format!("{:x}", hash)
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&self.index.to_be_bytes());
+        bytes.extend_from_slice(&self.timestamp.to_be_bytes());
+        bytes.extend_from_slice(self.prev_block_hash.as_bytes());
+        bytes.extend_from_slice(self.hash.as_bytes());
+        bytes.extend_from_slice(self.data.as_bytes());
+        bytes
+    }
 }
+
 #[derive(Debug)]
 pub struct Blockchain {
     pub chain: Vec<Block>,
