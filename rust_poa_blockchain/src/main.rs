@@ -18,7 +18,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
-
+    let _ = node.select_validator();
     async_std::task::spawn(async move {node.p2p.p2phandler().await;});
     async_std::task::spawn(async move {
         loop {

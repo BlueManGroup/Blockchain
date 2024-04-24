@@ -11,7 +11,6 @@ sha2 = "0.10.8"
 file = "1.1.2"
 fs = "0.0.5"
 glob = "0.3.1"
-
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 hex = "0.4"
@@ -26,3 +25,5 @@ libp2p-identity = "0.2.8"
 pqcrypto-dilithium = "0.5.0"
 pqcrypto-traits = "0.3.5"
 base64 = "0.22.0"
+rand = "0.8.5"
+dotenv = "0.15.0"

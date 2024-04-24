@@ -6,7 +6,8 @@ use pqcrypto_traits::sign::{PublicKey,SecretKey};
 use base64::{engine::general_purpose, Engine};
 use std::collections::HashMap;
 use sha2::{Sha256, Digest};
-
+use rand::seq::SliceRandom;
+use std::io;
 
 pub struct Payload {
     pub block: block::Block,
@@ -62,6 +63,7 @@ impl Node {
         let secretkey: dilithium3::SecretKey;
         let publickey: dilithium3::PublicKey;
         // refactor later to not allow creating keypair yourself
+        // below code fetches (or creates new if none present) keypair from env file
         if env::var("SECRETKEY").is_ok() && env::var("PUBLICKEY").is_ok() {
             let secretkey_bytes = env::var("SECRETKEY").unwrap().into_bytes();
             let publickey_bytes = env::var("PUBLICKEY").unwrap().into_bytes();
@@ -109,9 +111,19 @@ impl Node {
             
     // }
 
+    // select a random validator from the list of known nodes
+    pub fn select_validator(&self) -> std::io::Result<&(String, String)> {
+        if let Some(chosen_validator) = self.p2p.known_nodes.choose(&mut rand::thread_rng()) {
+            println!("validator randomly selected woooo: {:?}", &chosen_validator);
+            Ok(chosen_validator)
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "error finding validator"))
+        }
+    }
+
     pub fn send_block_to_validator(&self, payload: Payload, dest: String) -> std::io::Result<()> {
         
-        self.p2p.known_nodes.get(&dest);
+        //self.p2p.known_nodes.get(&dest);
         //self.p2p.swarm.dial
         
         // BLOCK CREATOR BURDE MÅSKE CHECKE OM BLOCKEN ER SOM DET SKAL VÆRE INDEN DEN BLIVER SENDT TIL RESTEN AF NETVÆRKET

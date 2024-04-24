@@ -72,7 +72,7 @@ impl Blockchain {
             msg_queue,
         };
 
-        storage::append_blocks_to_file(&[&genesis_block], blockchain.file_tracker.cur_election, blockchain.file_tracker.cur_enum).expect("fjerner warning");
+        storage::append_blocks_to_file(&[&genesis_block], blockchain.file_tracker.cur_election, blockchain.file_tracker.cur_enum).expect("mangler fil ved path:");
 
         blockchain
     }
