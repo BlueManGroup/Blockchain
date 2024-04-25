@@ -3,7 +3,7 @@ use chrono::prelude::*;
 use serde::{Serialize, Deserialize};
 use std::sync::mpsc;
 use crate::storage;
-
+//use crate::node::Payload;
 
 #[derive(Serialize, Deserialize, Debug,Clone)]
 pub struct Block {
@@ -52,7 +52,8 @@ pub struct Blockchain {
     pub chain: Vec<Block>,
     pub authorities: Vec<String>, // Public keys or identifiers of authorized nodes
     file_tracker: storage::FileTracker,
-    pub msg_queue: mpsc::Receiver<String>
+    pub inc_msg_queue: mpsc::Receiver<String>,
+    pub out_msg_queue: mpsc::Sender<Block>
 }
 
 /// Represents a blockchain.
@@ -62,14 +63,15 @@ impl Blockchain {
     /// # Returns
     ///
     /// A new instance of the blockchain.
-    pub fn new(msg_queue: mpsc::Receiver<String>) -> Self {
+    pub fn new(inc_msg_queue: mpsc::Receiver<String>, out_msg_queue: mpsc::Sender<Block>) -> Self {
         let genesis_block = Block::new(0, Utc::now().timestamp(), String::new(), "Genesis Block".to_string());
             
         let blockchain = Blockchain {
             chain: vec![genesis_block.clone()], // clone the genesis block to keep it in memory
             authorities: Vec::new(), // Initialize with known authorities
             file_tracker: storage::FileTracker::new(1, String::from("blocks")),
-            msg_queue,
+            inc_msg_queue,
+            out_msg_queue
         };
 
         storage::append_blocks_to_file(&[&genesis_block], blockchain.file_tracker.cur_election, blockchain.file_tracker.cur_enum).expect("mangler fil ved path:");
@@ -100,8 +102,8 @@ impl Blockchain {
         self.file_tracker.cur_block = self.file_tracker.find_file();
 
         storage::append_blocks_to_file(&[&new_block], self.file_tracker.cur_election, self.file_tracker.cur_enum).expect("jeg har bare sat dette ind for at fjerne warning tbh");
-        self.chain.push(new_block);
-        self.file_tracker.cur_block += 1 ;
+        self.chain.push(new_block.clone());
+        self.file_tracker.cur_block += 1;
         println!("{}", self.file_tracker.cur_block);
     }
 
@@ -131,7 +133,7 @@ impl Blockchain {
 
     pub fn check_queue(&mut self) {
         loop {
-            if let Ok(received) = self.msg_queue.try_recv() {
+            if let Ok(received) = self.inc_msg_queue.try_recv() {
                 let auth = 1;
                 self.add_block(received, auth);
             }

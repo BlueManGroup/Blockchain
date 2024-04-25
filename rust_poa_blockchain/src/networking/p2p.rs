@@ -3,7 +3,7 @@ use futures::prelude::*;
 use libp2p::Multiaddr;
 use libp2p::swarm::SwarmEvent;
 use libp2p::swarm::Swarm;
-use std::collections::HashMap;
+//use std::collections::HashMap;
 use std::time::Duration;
 use libp2p::floodsub::{FloodsubEvent, Topic};
 use libp2p::identity;
@@ -11,11 +11,12 @@ use libp2p::identity::Keypair;
 use libp2p::PeerId; 
 use std::sync::mpsc::Sender; 
 use std::env;
-use std::str;
+//use std::str;
 use dotenv::dotenv;
 use crate::networking::behaviour;
 use base64;
-
+use crate::node::Payload;
+//use crate::block::Block;
 
 
 pub struct P2p {
@@ -26,11 +27,11 @@ pub struct P2p {
     pub listen_addr: Multiaddr,
     pub floodsub_topic: Topic,
     pub known_nodes: Vec<(String, String)>,
-    pub msg_queue: Sender<String>,
+    pub inc_msg_queue: Sender<String>,
 }
 
 impl P2p{
-    pub fn new(msg_queue: Sender<String>) -> Self {
+    pub fn new(inc_msg_queue: Sender<String>) -> Self {
         let identity_keys= Keypair::generate_ed25519();
         dotenv().ok();
 
@@ -55,6 +56,7 @@ impl P2p{
         let behaviour2 = behaviour::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
         let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().expect("Failed to parse listen address");
         let floodsub_topic: Topic = Topic::new("blockchain".to_string());
+        // idk publickey og ip eller sådan noget - husk at ændre boot method til at have samme format
         let mut known_nodes: Vec<(String, String)> = Vec::new(); 
         // add random node values for debugging purposes
         // REMEMBER TO REMOVE
@@ -63,6 +65,7 @@ impl P2p{
         known_nodes.push((String::from("shit"), String::from("shit2")));
         known_nodes.push((String::from("validat"), String::from("validat")));
         known_nodes.push((String::from("johannes"), String::from("johannes2")));
+        
 
         let mut swarm = libp2p::SwarmBuilder::with_existing_identity(identity_keys.clone())
             .with_async_std()
@@ -84,7 +87,7 @@ impl P2p{
             listen_addr,
             floodsub_topic,
             known_nodes,
-            msg_queue,
+            inc_msg_queue
         };
         p2p
     }
@@ -123,7 +126,7 @@ impl P2p{
                     println!("message received");
                     println!("Received:'{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
                     let message_str = String::from_utf8_lossy(&message.data).into_owned();
-                    self.msg_queue.send(message_str).expect("ooppssssiiiieeees");
+                    self.inc_msg_queue.send(message_str.clone()).expect("ooppssssiiiieeees");
                 },
                 SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
 
@@ -162,5 +165,47 @@ impl P2p{
         }
     
     }
+
+    pub async fn send_block_to_nodes(&mut self, msg: Payload) -> Result<(),()> {
+        let block_str = serde_json::to_string(&msg).unwrap();
+        self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), block_str.clone());
+        println!("sent msg: {:?}", block_str);
+        Ok(())
+    }
+    // target = (peerid, ip)
+    pub async fn give_node_the_boot(&mut self, target: (String, String)) -> Result<(),()> {
+        let target_ip; 
+        let target_key;
+        if target.0 != "NULL" {
+            target_ip = self.get_ip_by_key(target.0.clone()).unwrap();
+            target_key = target.0;
+        } else {
+            target_key = self.get_key_from_ip(target.1.clone()).unwrap();
+            target_ip = target.1;
+        };
+        
+        // let local_peer_id_decoded = general_purpose::STANDARD.decode(local_peer_id_b64);
+        // let local_peer_id = PeerId::from_bytes(&local_peer_id_decoded.unwrap());
+        // //let local_peer_id = PeerId::from_bytes(general_purpose::STANDARD.decode_slice(dotenv::var("PEER_ID").unwrap().as_bytes()));
+        // let local_peer_id = match local_peer_id {
+        //     Ok(peer_id) => peer_id,
+        //     // IKKE GODT VVVVV
+        //     Err(e) => panic!("{}", e)
+        // };
+        println!("HER!");
+        if let Some(index) = self.known_nodes.iter().position(|(k, v)| *k == target_key || *v == target_ip) {
+            self.known_nodes.remove(index);
+            println!("hvorfor er ddu der");
+        }
+        println!("known nodes: {:?}", self.known_nodes);
+        let target_public_key = identity::PublicKey::try_decode_protobuf(target_key.as_bytes()).expect("error getting key from bytes");
+        let target_peer_id = PeerId::from_public_key(&target_public_key);
+        
+        println!("JEG NaaR HERTIL");
+        
+        self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&target_peer_id);
+        Ok(())
+    }
+
 }
 //2 p || !2 p

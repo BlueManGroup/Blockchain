@@ -2,13 +2,18 @@ use std::env;
 use crate::{block, networking};
 use std::sync::mpsc;
 use pqcrypto_dilithium::dilithium3;
-use pqcrypto_traits::sign::{PublicKey,SecretKey};
+//use pqcrypto_dilithium::dilithium3::SignedMessage;
+use pqcrypto_traits::sign::{PublicKey,SecretKey, };
 use base64::{engine::general_purpose, Engine};
-use std::collections::HashMap;
-use sha2::{Sha256, Digest};
+//use std::collections::HashMap;
+//use sha2::{Sha256, Digest};
 use rand::seq::SliceRandom;
 use std::io;
+use std::sync::mpsc::Receiver;
+use crate::block::Block;
+use serde::Serialize;
 
+#[derive(Serialize)]
 pub struct Payload {
     pub block: block::Block,
     pub signature: dilithium3::SignedMessage,
@@ -17,7 +22,6 @@ pub struct Payload {
 
 impl Payload {
     pub fn new (block: block::Block, author_id: String, signature: dilithium3::SignedMessage) -> Self {
-
         let payload = Payload {
             block,
             signature,
@@ -51,13 +55,14 @@ pub struct Node {
     pub blockchain: block::Blockchain,
     pub name: String,
     pub p2p: networking::p2p::P2p,
-    
-
+    pub out_msg_queue: Receiver<Block>
 }
 
 impl Node {
-    pub fn new(msg_rx: mpsc::Receiver<String>, msg_tx: mpsc::Sender<String> ) -> Self {
+    pub fn new() -> Self {
 
+        let (inc_msg_tx, inc_msg_rx) = mpsc::channel();
+        let (out_msg_tx, out_msg_rx) = mpsc::channel();
         
         // good for PoC, maybe bad for production
         let secretkey: dilithium3::SecretKey;
@@ -80,18 +85,19 @@ impl Node {
         }
 
 
-        let blockchain = block::Blockchain::new(msg_rx);
+        let blockchain = block::Blockchain::new(inc_msg_rx, out_msg_tx);
 
         //create p2p network
-        let mut p2p = networking::p2p::P2p::new(msg_tx);
-
+        let p2p = networking::p2p::P2p::new(inc_msg_tx);
+        
         //return object
         let node = Node {
             secretkey,
             publickey,
             blockchain,
             name: String::from("Node"),
-            p2p 
+            p2p,
+            out_msg_queue: out_msg_rx
         };
         node
     }
@@ -134,6 +140,13 @@ impl Node {
         
 
         Ok(())
+    }
+
+    pub async fn send_block_to_network(&mut self) {
+        let block = self.out_msg_queue.recv().expect("error fetching block from q");
+        let payload = self.create_block_payload(block);
+        let _ = self.p2p.send_block_to_nodes(payload).await;
+        println!("sent block to p2p");
     }
 }
 
