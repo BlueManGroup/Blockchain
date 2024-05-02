@@ -1,3 +1,4 @@
+use async_std::fs::OpenOptions;
 use base64::{engine::general_purpose, Engine};
 use futures::prelude::*;
 use libp2p::Multiaddr;
@@ -9,6 +10,7 @@ use libp2p::floodsub::{FloodsubEvent, Topic};
 use libp2p::identity;
 use libp2p::identity::Keypair;
 use libp2p::PeerId; 
+use libp2p::mdns;
 use std::sync::mpsc::Sender; 
 use std::env;
 //use std::str;
@@ -32,15 +34,18 @@ pub struct P2p {
 
 impl P2p{
     pub fn new(inc_msg_queue: Sender<String>) -> Self {
-        let identity_keys= Keypair::generate_ed25519();
+        //let identity_keys= Keypair::generate_ed25519();
         dotenv().ok();
 
-        if env::var("PEER_ID").is_err() {
-            // create peerid from key and store it in .env
-            let peer_id_bytes = identity_keys.public().to_peer_id().to_bytes();
-            let peer_id = general_purpose::STANDARD.encode(&peer_id_bytes);
-            env::set_var("PEER_ID", peer_id);
-        };
+        // BELOW STATEMENT COMMENTED OUT AS PEER_ID IS ASSUMED TO BE PRESENT WHEN RUNNING THIS PROGRAM
+        // SHOULD PROBABLY BE UNCOMMENTED BUT CHANGED TO BE ERROR HANDLING INSTEAD
+        // if env::var("PEER_ID").is_err() {
+        //     // create peerid from key and store it in .env
+        //     let peer_id_bytes = identity_keys.public().to_peer_id().to_bytes();
+        //     let peer_id = general_purpose::STANDARD.encode(&peer_id_bytes);
+        //     env::set_var("PEER_ID", peer_id);
+        // };
+
         // fetch peer id (stored as b64) and convert it to peerid object
         let local_peer_id_b64 = dotenv::var("PEER_ID").unwrap();
         let local_peer_id_decoded = general_purpose::STANDARD.decode(local_peer_id_b64);
@@ -52,11 +57,22 @@ impl P2p{
             Err(e) => panic!("{}", e)
         };
 
+        //get libp2p identity keys from env file, deserialize for further use
+        
+        let env_identity_keys_str = dotenv::var("P2P_IDENTITY_KEYS").unwrap();
+        let env_identity_keys = env_identity_keys_str.as_bytes();
+        let identity_keys = Keypair::from_protobuf_encoding(env_identity_keys).unwrap();
+
+    //     let env_identity_keys = dotenv::var("P2P_IDENTITY_KEYS").unwrap().as_bytes();
+    //   let identity_keys = Keypair::from_protobuf_encoding(env_identity_keys).unwrap();
+
         let behaviour = behaviour::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
         let behaviour2 = behaviour::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
         let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().expect("Failed to parse listen address");
         let floodsub_topic: Topic = Topic::new("blockchain".to_string());
-        // idk publickey og ip eller sådan noget - husk at ændre boot method til at have samme format
+
+
+        // idk publickey og peer_id eller sådan noget - husk at ændre boot method til at have samme format
         let mut known_nodes: Vec<(String, String)> = Vec::new(); 
         // add random node values for debugging purposes
         // REMEMBER TO REMOVE
@@ -94,19 +110,19 @@ impl P2p{
 
     //iterate over vector to find entry where ip == ip we're looking for
     //then get the peer id at the same index (technically not that but w/e) 
-    pub fn get_key_from_ip(&self, ip_address: String) -> Option<String> {
+    pub fn get_key_from_peer_id(&self, peer_id: String) -> Option<String> {
         self.known_nodes
             .iter()
-            .find(|(_, node_ip)| *node_ip == ip_address)
-            .map(|(peer_id, _)| peer_id.clone())
+            .find(|(_, node_peer)| *node_peer == peer_id)
+            .map(|(key, _)| key.clone())
     }
 
     //((((((reverse version of the above method))))))
-    pub fn get_ip_by_key(&self, key: String) -> Option<String> {
+    pub fn get_peer_id_from_key(&self, key: String) -> Option<String> {
         self.known_nodes
             .iter()
             .find(|(node_key, _)| *node_key == key)
-            .map(|(_, ip_address)| ip_address.clone())
+            .map(|(_, peer_id)| peer_id.clone())
     }
     
 
@@ -121,19 +137,41 @@ impl P2p{
 
         loop {
             match self.swarm.select_next_some().await {
+                
+                //Write to console when listening on address
                 SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
+
+                //Handle inbound Floodsub messages
                 SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
                     println!("message received");
                     println!("Received:'{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
                     let message_str = String::from_utf8_lossy(&message.data).into_owned();
                     self.inc_msg_queue.send(message_str.clone()).expect("ooppssssiiiieeees");
                 },
+
+                //Handle inbound Floodsub subscriptions
                 SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
 
                     println!("Peer {:?} subscribed to '{:?}'", &peer_id, &topic);
                     let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
                     self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), message_str);
                 },
+
+                //Mdns Handler, poorly optimised as it dials all known nodes on discovery, but maybe not?
+                SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
+                    for (peer_id, addr) in peers {
+                        println!("Discovered: {:?} at {:?}", peer_id, addr);
+                        self.swarm.dial(addr).expect("Failed to dial address");
+                    }
+                },
+
+                SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
+                    for (peer_id, addr) in peers {
+                        println!("Expired: {:?} at {:?}", peer_id, addr);
+                    }
+                },
+
+                //Handle Identify events
                 SwarmEvent::Behaviour(behaviour::BehaviourEvent::Identify(event)) => {
                 
                     match event {
@@ -168,19 +206,22 @@ impl P2p{
 
     pub async fn send_block_to_nodes(&mut self, msg: Payload) -> Result<(),()> {
         let block_str = serde_json::to_string(&msg).unwrap();
-        self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), block_str.clone());
+        self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), block_str.as_bytes().to_owned());
         println!("sent msg: {:?}", block_str);
         Ok(())
     }
+
+    // pub async fn 
     // target = (peerid, ip)
+    
     pub async fn give_node_the_boot(&mut self, target: (String, String)) -> Result<(),()> {
         let target_ip; 
         let target_key;
         if target.0 != "NULL" {
-            target_ip = self.get_ip_by_key(target.0.clone()).unwrap();
+            target_ip = self.get_peer_id_from_key(target.0.clone()).unwrap();
             target_key = target.0;
         } else {
-            target_key = self.get_key_from_ip(target.1.clone()).unwrap();
+            target_key = self.get_key_from_peer_id(target.1.clone()).unwrap();
             target_ip = target.1;
         };
         

@@ -2,18 +2,17 @@ use std::env;
 use crate::{block, networking};
 use std::sync::mpsc;
 use pqcrypto_dilithium::dilithium3;
-//use pqcrypto_dilithium::dilithium3::SignedMessage;
-use pqcrypto_traits::sign::{PublicKey,SecretKey, };
+use pqcrypto_traits::sign::{PublicKey,SecretKey};
 use base64::{engine::general_purpose, Engine};
-//use std::collections::HashMap;
-//use sha2::{Sha256, Digest};
+use std::collections::HashMap;
+use sha2::{Sha256, Digest};
 use rand::seq::SliceRandom;
 use std::io;
-use std::sync::mpsc::Receiver;
 use crate::block::Block;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
-#[derive(Serialize)]
+
+#[derive(Serialize, Deserialize)]
 pub struct Payload {
     pub block: block::Block,
     pub signature: dilithium3::SignedMessage,
@@ -22,6 +21,7 @@ pub struct Payload {
 
 impl Payload {
     pub fn new (block: block::Block, author_id: String, signature: dilithium3::SignedMessage) -> Self {
+
         let payload = Payload {
             block,
             signature,
@@ -53,22 +53,21 @@ pub struct Node {
     pub publickey: dilithium3::PublicKey,
    // pub node_list: // array med strings(?)
     pub blockchain: block::Blockchain,
-    pub name: String,
     pub p2p: networking::p2p::P2p,
-    pub out_msg_queue: Receiver<Block>
+    
+
 }
 
 impl Node {
-    pub fn new() -> Self {
+    pub fn new(msg_rx: mpsc::Receiver<String>, msg_tx: mpsc::Sender<String> ) -> Self {
 
-        let (inc_msg_tx, inc_msg_rx) = mpsc::channel();
-        let (out_msg_tx, out_msg_rx) = mpsc::channel();
         
         // good for PoC, maybe bad for production
         let secretkey: dilithium3::SecretKey;
         let publickey: dilithium3::PublicKey;
         // refactor later to not allow creating keypair yourself
         // below code fetches (or creates new if none present) keypair from env file
+        // change this to be error handling instead of keypair generation
         if env::var("SECRETKEY").is_ok() && env::var("PUBLICKEY").is_ok() {
             let secretkey_bytes = env::var("SECRETKEY").unwrap().into_bytes();
             let publickey_bytes = env::var("PUBLICKEY").unwrap().into_bytes();
@@ -84,29 +83,27 @@ impl Node {
             env::set_var("PUBLICKEY", general_purpose::STANDARD.encode(publickey_bytes));
         }
 
-
-        let blockchain = block::Blockchain::new(inc_msg_rx, out_msg_tx);
+        let blockchain = block::Blockchain::new(msg_rx);
 
         //create p2p network
-        let p2p = networking::p2p::P2p::new(inc_msg_tx);
-        
+        let mut p2p = networking::p2p::P2p::new(msg_tx);
+
         //return object
+        // CHANGE NAME TO PEERID
         let node = Node {
             secretkey,
             publickey,
             blockchain,
-            name: String::from("Node"),
-            p2p,
-            out_msg_queue: out_msg_rx
+            p2p 
         };
         node
     }
 
     pub fn create_block_payload(&self, block: block::Block) -> Payload {
         let mut payload_msg = Vec::new();
-        payload_msg.extend_from_slice(block.to_bytes().as_slice());
-        payload_msg.extend_from_slice(self.name.as_bytes());
-        let name_clone = self.name.clone(); // Clone the name string
+        payload_msg.extend_from_slice(block.hash.as_bytes()); // send hash of block in signature
+        payload_msg.extend_from_slice(self.p2p.local_peer_id.to_bytes().as_slice()); //send peerid in signature for further confirmation that im me
+        let name_clone = self.p2p.local_peer_id.to_string(); // send name (peerid ?) for easy identification (receiver can just look up pubkey)
         let payload = Payload::new(block, name_clone, dilithium3::sign(payload_msg.as_slice(), &self.secretkey));
         
         payload
@@ -142,11 +139,21 @@ impl Node {
         Ok(())
     }
 
-    pub async fn send_block_to_network(&mut self) {
-        let block = self.out_msg_queue.recv().expect("error fetching block from q");
-        let payload = self.create_block_payload(block);
-        let _ = self.p2p.send_block_to_nodes(payload).await;
-        println!("sent block to p2p");
+    pub fn deserialize_payload(message: &[u8]) -> Result<Payload, serde_json::Error> {
+        let payload: Payload = serde_json::from_slice(message)?;
+        Ok(payload)
+    }
+
+    pub fn validate_block(&mut self, payload_bytes: &[u8]) -> Result<(bool), ()> {
+        let payload = Node::deserialize_payload(payload_bytes).unwrap();
+
+        let validation_result = self.blockchain.is_block_valid(payload.block);
+        // INDSÆT STIKPRØVER HER
+
+        if validation_result == false {
+            self.p2p.give_node_the_boot((String::from("NULL"), payload.author_id));
+        }
+        Ok((validation_result)) 
     }
 }
 
