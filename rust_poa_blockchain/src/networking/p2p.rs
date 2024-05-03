@@ -76,6 +76,7 @@ impl P2p{
         let mut known_nodes: Vec<(String, String)> = Vec::new(); 
         // add random node values for debugging purposes
         // REMEMBER TO REMOVE
+        // PUBLIC KEY DILITHIUM3, PEERID
         known_nodes.push((String::from("test"), String::from("test2")));
         known_nodes.push((String::from("pis"), String::from("pis2")));
         known_nodes.push((String::from("shit"), String::from("shit2")));
@@ -212,7 +213,7 @@ impl P2p{
     }
 
     // pub async fn 
-    // target = (peerid, ip)
+    // target = (dilithiumkey, peerid)
     
     pub async fn give_node_the_boot(&mut self, target: (String, String)) -> Result<(),()> {
         let target_ip; 
@@ -245,6 +246,9 @@ impl P2p{
         println!("JEG NaaR HERTIL");
         
         self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&target_peer_id);
+
+        
+
         Ok(())
     }
 

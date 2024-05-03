@@ -5,7 +5,7 @@ use libp2p::{
     mdns, request_response
 };
 use libp2p_identity::PublicKey;
-mod ReqRes;
+use crate::networking::reqres;
 
 #[derive(NetworkBehaviour)]
 pub struct Behaviour {
