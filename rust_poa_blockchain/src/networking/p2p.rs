@@ -198,6 +198,28 @@ impl P2p{
                         
                     // swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
                 },
+
+                //handler for Request response
+                SwarmEvent::Behaviour(behaviour::BehaviourEvent::Reqres(event)) => {
+
+                    match event {
+                        libp2p::request_response::Event::InboundFailure { peer, request_id, error } => {
+                            
+                        },
+                        
+                        libp2p::request_response::Event::OutboundFailure { peer, request_id, error } => {
+
+                        },
+
+                        libp2p::request_response::Event::Message { peer, message } => {
+
+                        },
+
+                        libp2p::request_response::Event::ResponseSent { peer, request_id } => {
+
+                        }
+                    }
+                }
                 _ => {}
             }
         

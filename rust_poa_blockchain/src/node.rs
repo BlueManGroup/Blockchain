@@ -141,12 +141,12 @@ impl Node {
     }
 
     pub fn deserialize_message(message: &[u8]) -> Result<serde_json::Value, serde_json::Error> {
-        let payload = serde_json::json!(message)?;
+        let payload = serde_json::json!(message);
         Ok(payload)
     }
 
     pub fn deserialize_validator_message(message: &[u8]) -> Result<serde_json::Value, serde_json::Error> {
-        let payload = serde_json::json!(message)?;
+        let payload = serde_json::json!(message);
         Ok(payload)
     }
 
@@ -161,8 +161,15 @@ impl Node {
     }
 
     pub fn create_validator_payload(&self, payload_bytes: &[u8]) -> Result<(ValidatorPayload),()> {
-        let payload = Node::deserialize_payload(payload_bytes).unwrap();
-        let validation_result = self.validate_block(payload); // HUSK MÅSKE AT ÆNDRE
+        let payload_msg = Node::deserialize_message(payload_bytes).unwrap();
+        let block_msg = Block::new(payload_msg.get("block").unwrap().get("index").un)
+        let payload = Payload::new(
+            payload_msg.get("block"),               
+            payload_msg.get("author_id").unwrap(),
+            payload_msg.get("signature").unwrap()     
+        );
+
+        let validation_result = self.validate_block(payload).unwrap(); // HUSK MÅSKE AT ÆNDRE
 
         let validator_payload;
         
@@ -177,7 +184,7 @@ impl Node {
 
     pub fn interpret_message(&self, message: &[u8]) -> Result<(bool),()> {
         // declare (and maybe initialize) vars used in method
-        let deserialized_message = Node::deserialize_message(message);
+        let deserialized_message = Node::deserialize_message(message).unwrap();
         let objectified_message;
         let decrypted_signature;
         let is_block_good: bool = false;
@@ -187,13 +194,13 @@ impl Node {
         // if it does, treat as validated payload 
         // if not, we have to validate the payload
         // check whether if any of deserialized_message.validator_id, deserialized_message.payload.block.author_id, deserialized_message.block.author_id
-        if let Some(validator_sig) = deserialized_message.validator_sig {
+        if let Some(validator_sig) = deserialized_message.get("validator_id") {
 
-            if self.p2p.known_nodes.iter().any(|( _,v)| *v == deserialized_message.validator_id ) {
-                if self.p2p.known_nodes.iter().any(|( _,v)| *v == deserialized_message.payload.author_id ) {
+            if self.p2p.known_nodes.iter().any(|( _,v)| *v == deserialized_message.get("validator_id").unwrap() ) {
+                if self.p2p.known_nodes.iter().any(|( _,v)| *v == deserialized_message.get("payload").unwrap().get("author_id").unwrap() ) {
                     is_block_good = true;
                 } else {
-                    Ok((false))
+                    Ok(false)
                 }
             } else {
                 Ok((false))
@@ -230,9 +237,11 @@ impl Node {
             self.p2p.give_node_the_boot((String::from("NULL"), deserialized_message.payload.validator_id));
        }
 
-       Ok((is_block_good))
+       Ok(is_block_good)
         
     }
+
+    
 }
 
 
