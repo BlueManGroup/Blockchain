@@ -204,19 +204,21 @@ impl P2p{
 
                     match event {
                         libp2p::request_response::Event::InboundFailure { peer, request_id, error } => {
-                            
+                            println("ReqRes: Inbound failure")
                         },
                         
                         libp2p::request_response::Event::OutboundFailure { peer, request_id, error } => {
-
+                            println("reqres: Outbound failure")
                         },
 
                         libp2p::request_response::Event::Message { peer, message } => {
-
+                            println!("reqres: Message received \n
+                            message: {:?}", message);
                         },
 
                         libp2p::request_response::Event::ResponseSent { peer, request_id } => {
-
+                            println!("reqres: Response sent")
+                        },
                         }
                     }
                 }
