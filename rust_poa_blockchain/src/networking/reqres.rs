@@ -5,10 +5,10 @@ use async_std;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct GreetRequest {
-    name: String,
+    pub message: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct GreetResponse {
-    message: String,
+    pub message: String,
 }

@@ -1,17 +1,16 @@
 use sha2::{Sha256, Digest};
 use chrono::prelude::*;
 use serde::{Serialize, Deserialize};
-use std::sync::mpsc;
 use crate::storage;
 
 
 #[derive(Serialize, Deserialize, Debug,Clone)]
 pub struct Block {
     pub index: u64,
-    timestamp: i64,
-    prev_block_hash: String,
+    pub timestamp: i64,
+    pub prev_block_hash: String,
     pub hash: String,
-    data: String,
+    pub data: String,
 }
 
 impl Block {
@@ -45,6 +44,10 @@ impl Block {
         bytes.extend_from_slice(self.data.as_bytes());
         bytes
     }
+
+    pub fn to_block(value: serde_json::Value) -> Block {
+        serde_json::from_value(value).unwrap()
+    }
 }
 
 #[derive(Debug)]
@@ -52,7 +55,6 @@ pub struct Blockchain {
     pub chain: Vec<Block>,
     pub authorities: Vec<String>, // Public keys or identifiers of authorized nodes
     file_tracker: storage::FileTracker,
-    pub msg_queue: mpsc::Receiver<String>
 }
 
 /// Represents a blockchain.
@@ -62,14 +64,13 @@ impl Blockchain {
     /// # Returns
     ///
     /// A new instance of the blockchain.
-    pub fn new(msg_queue: mpsc::Receiver<String>) -> Self {
+    pub fn new() -> Self {
         let genesis_block = Block::new(0, Utc::now().timestamp(), String::new(), "Genesis Block".to_string());
             
         let blockchain = Blockchain {
             chain: vec![genesis_block.clone()], // clone the genesis block to keep it in memory
             authorities: Vec::new(), // Initialize with known authorities
             file_tracker: storage::FileTracker::new(1, String::from("blocks")),
-            msg_queue,
         };
 
         storage::append_blocks_to_file(&[&genesis_block], blockchain.file_tracker.cur_election, blockchain.file_tracker.cur_enum).expect("mangler fil ved path:");
@@ -84,7 +85,7 @@ impl Blockchain {
     /// * `data` - The data to be stored in the new block.
     /// * `authority` - The authority responsible for adding the block.
     /// HUSK AT TAGE TILBAGE TIL STRING PÅ AUTH (FJERNET FOR TESTING PURPOSES)
-    pub fn add_block(&mut self, data: String, authority: i32) {
+    pub fn add_block(&mut self, data: String, authority: String, timestamp: i64, index: u64) {
         // if !self.authorities.contains(&authority) {
         //     println!("Authority not recognized.");
         //     return;
@@ -92,14 +93,14 @@ impl Blockchain {
 
         let prev_block = &self.chain[self.chain.len() - 1];
         let new_block = Block::new(
-            self.chain.len() as u64,
-            Utc::now().timestamp(),
+            index,
+            timestamp,
             prev_block.hash.clone(),
             data,
         );
         self.file_tracker.cur_block = self.file_tracker.find_file();
 
-        storage::append_blocks_to_file(&[&new_block], self.file_tracker.cur_election, self.file_tracker.cur_enum).expect("jeg har bare sat dette ind for at fjerne warning tbh");
+        storage::append_blocks_to_file(&[&new_block], self.file_tracker.cur_election, self.file_tracker.cur_enum).expect("error adding block to local chain");
         self.chain.push(new_block);
         self.file_tracker.cur_block += 1 ;
         println!("{}", self.file_tracker.cur_block);
@@ -130,27 +131,27 @@ impl Blockchain {
 
         let last_block_index = self.chain.len() - 1;
         let cur_block = &self.chain[last_block_index];
-        if (block.index != cur_block.index) {
+        if block.index != cur_block.index {
             return false;
         }
 
-        if (block.prev_block_hash != cur_block.hash) {
+        if block.prev_block_hash != cur_block.hash {
             return false;
         }
 
-        if (block.calculate_hash() != block.hash) {
+        if block.calculate_hash() != block.hash {
             return false;
         }
 
         true
     } 
 
-    pub fn check_queue(&mut self) {
-        loop {
-            if let Ok(received) = self.msg_queue.try_recv() {
-                let auth = 1;
-                self.add_block(received, auth);
-            }
-        }
-    }
+    // pub fn check_queue(&mut self) {
+    //     loop {
+    //         if let Ok(received) = self.msg_queue.try_recv() {
+    //             let auth = 1;
+    //             self.add_block(received, auth);
+    //         }
+         //}
+    //}
 }

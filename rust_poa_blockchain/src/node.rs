@@ -1,19 +1,20 @@
 use std::env;
 use crate::{block, networking};
-use std::sync::mpsc;
+use std::sync::mpsc::{Sender, Receiver};
 use pqcrypto_dilithium::dilithium3;
-use pqcrypto_traits::sign::{PublicKey,SecretKey};
+use pqcrypto_traits::sign::{PublicKey,SecretKey, SignedMessage};
 use base64::{engine::general_purpose, Engine};
-use std::collections::HashMap;
-use sha2::{Sha256, Digest};
+use sha2::{Digest};
 use rand::seq::SliceRandom;
 use std::io;
 use crate::block::Block;
 use serde::{Serialize, Deserialize};
+use serde_json::Value;
 use libp2p::PeerId; 
+use crate::networking::reqres;
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Payload {
     pub block: block::Block,
     pub signature: dilithium3::SignedMessage,
@@ -30,8 +31,13 @@ impl Payload {
         };
         payload
     }
+
+    pub fn to_payload(value: serde_json::Value) -> Payload {
+        serde_json::from_value(value).unwrap()
+    }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ValidatorPayload {
     pub payload: Payload,
     pub validator_id: Vec<u8>,
@@ -47,6 +53,10 @@ impl ValidatorPayload {
         };
         validator_payload
     }
+
+    pub fn to_validator_payload(value: serde_json::Value) -> ValidatorPayload {
+        serde_json::from_value(value).unwrap()
+    }
 }
 
 pub struct Node {
@@ -55,12 +65,13 @@ pub struct Node {
    // pub node_list: // array med strings(?)
     pub blockchain: block::Blockchain,
     pub p2p: networking::p2p::P2p,
+    pub out_msg_tx: Sender<String>
     
 
 }
 
 impl Node {
-    pub fn new(msg_rx: mpsc::Receiver<String>, msg_tx: mpsc::Sender<String> ) -> Self {
+    pub fn new(in_msg_tx: Sender<String>, in_msg_rx: Receiver<String>,  out_msg_tx: Sender<String>, out_msg_rx: Receiver<String> ) -> Self {
 
         
         // good for PoC, maybe bad for production
@@ -84,10 +95,10 @@ impl Node {
             env::set_var("PUBLICKEY", general_purpose::STANDARD.encode(publickey_bytes));
         }
 
-        let blockchain = block::Blockchain::new(msg_rx);
+        let blockchain = block::Blockchain::new();
 
         //create p2p network
-        let mut p2p = networking::p2p::P2p::new(msg_tx);
+        let mut p2p = networking::p2p::P2p::new(in_msg_tx, out_msg_rx);
 
         //return object
         // CHANGE NAME TO PEERID
@@ -95,7 +106,8 @@ impl Node {
             secretkey,
             publickey,
             blockchain,
-            p2p 
+            p2p,
+            out_msg_tx
         };
         node
     }
@@ -145,11 +157,6 @@ impl Node {
         Ok(payload)
     }
 
-    pub fn deserialize_validator_message(message: &[u8]) -> Result<serde_json::Value, serde_json::Error> {
-        let payload = serde_json::json!(message);
-        Ok(payload)
-    }
-
     pub fn validate_block(&mut self, payload: Payload) -> Result<(bool), ()> {
         let validation_result = self.blockchain.is_block_valid(payload.block);
         // INDSÆT STIKPRØVER HER
@@ -160,85 +167,109 @@ impl Node {
         Ok((validation_result)) 
     }
 
-    pub fn create_validator_payload(&self, payload_bytes: &[u8]) -> Result<(ValidatorPayload),()> {
-        let payload_msg = Node::deserialize_message(payload_bytes).unwrap();
-        let block_msg = Block::new(payload_msg.get("block").unwrap().get("index").un)
-        let payload = Payload::new(
-            payload_msg.get("block"),               
-            payload_msg.get("author_id").unwrap(),
-            payload_msg.get("signature").unwrap()     
-        );
+    pub fn create_validator_payload(&mut self, payload_bytes: &[u8]) -> Result<(ValidatorPayload),()> {
+        let deseralized_payload = Node::deserialize_message(payload_bytes).unwrap();
+        let block_msg = Block::to_block(*deseralized_payload.get("block").unwrap());
+        // let sig_msg_val = payload_msg.get("signature").unwrap();
+        
+        let payload = Payload::to_payload(deseralized_payload);
 
-        let validation_result = self.validate_block(payload).unwrap(); // HUSK MÅSKE AT ÆNDRE
+        let validation_result = self.validate_block(payload.clone()).unwrap(); // HUSK MÅSKE AT ÆNDRE
 
         let validator_payload;
         
         if validation_result {
-            let validator_signature = dilithium3::sign(payload.block.hash, &self.secretkey);
+            let validator_signature = dilithium3::sign(payload.block.hash.as_bytes(), &self.secretkey);
             let validator_id = self.p2p.local_peer_id.to_bytes();
             validator_payload = ValidatorPayload::new(payload, validator_id, validator_signature);
+        } else {
+           return Err(());
         }
+
+        
 
         Ok((validator_payload))
     }
 
-    pub fn interpret_message(&self, message: &[u8]) -> Result<(bool),()> {
+    pub async fn interpret_message(&mut self, message: &[u8]) -> Result<(bool), ()> {
         // declare (and maybe initialize) vars used in method
         let deserialized_message = Node::deserialize_message(message).unwrap();
-        let objectified_message;
         let decrypted_signature;
-        let is_block_good: bool = false;
-        let block;
+        let mut is_block_good: bool = false;
 
-        // check if validator_sig exists in the json sent from the message
-        // if it does, treat as validated payload 
-        // if not, we have to validate the payload
-        // check whether if any of deserialized_message.validator_id, deserialized_message.payload.block.author_id, deserialized_message.block.author_id
+        let validator_payload: ValidatorPayload;
+        let payload: Payload;
+        let out_msg: String;
+
+        // if validator payload enter this abomination
         if let Some(validator_sig) = deserialized_message.get("validator_id") {
+            validator_payload = ValidatorPayload::to_validator_payload(deserialized_message.to_owned());
+            payload = validator_payload.payload.to_owned();
 
-            if self.p2p.known_nodes.iter().any(|( _,v)| *v == deserialized_message.get("validator_id").unwrap() ) {
-                if self.p2p.known_nodes.iter().any(|( _,v)| *v == deserialized_message.get("payload").unwrap().get("author_id").unwrap() ) {
+            if self.p2p.known_nodes.iter().any(|( _,v)| *v == validator_sig.to_owned().to_string() ) {
+                if self.p2p.known_nodes.iter().any(|( _,v)| *v == payload.author_id.to_owned() ) {
                     is_block_good = true;
                 } else {
-                    Ok(false)
+                    return Ok((false))
                 }
             } else {
-                Ok((false))
+                return Ok((false))
             }
             // get the public key from the validatorpayload and decrypt the signature
-            let validator_pub_key_string = self.p2p.get_key_from_peer_id(PeerId::from_bytes(deserialized_message.validator_id)).unwrap();
-            let validator_pub_key: dilithium3::PublicKey = dilithium3::PublicKey::from_bytes(validator_pub_key_string.as_bytes());
-            decrypted_signature = dilithium3::open(&deserialized_message.validator_sig, &validator_pub_key);
+        
+            let validator_pub_key_string = self.p2p.get_key_from_peer_id(String::from_utf8(validator_payload.validator_id.to_owned()).unwrap());
+            let validator_pub_key: dilithium3::PublicKey = dilithium3::PublicKey::from_bytes(validator_pub_key_string.unwrap().as_bytes()).unwrap();
 
-
+            decrypted_signature = dilithium3::open(&validator_payload.validator_sig, &validator_pub_key).unwrap();
 
             // check whether or not the hash in the signature matches with the block itself
-            if decrypted_signature == deserialized_message.payload.block.hash {
+            if String::from_utf8(decrypted_signature).unwrap() == payload.block.hash {
                 is_block_good = true;
             }
         } else {
-            //Pass to create_validator_payload
-            if self.p2p.known_nodes.iter().any(|(_, v)| *v == deserialized_message.author_id) {
+            // if not validator payload, enter this lesser abomination
+            // validates block and creates a validator payload for further transmission
+            payload = Payload::to_payload(deserialized_message);
+
+            if self.p2p.known_nodes.iter().any(|(_, v)| *v == payload.author_id.to_owned()) {
                 is_block_good = true;
             } else {
-                Ok((false))
+                return Ok((false))
             }
             // THEN add to blockchain
             //might create an error here, not sure
-            let validator_payload = self.create_validator_payload(deserialized_message).unwrap();
-            self.p2p.inc_msg_queue.send(validator_payload);
+        
+            validator_payload = self.create_validator_payload(message).unwrap();
+
         }
         
         
-
        // do things if not is block good
        if !is_block_good {
             // give block boot and some other thingys
-            self.p2p.give_node_the_boot((String::from("NULL"), deserialized_message.payload.validator_id));
+            self.p2p.give_node_the_boot((String::from("NULL"), payload.author_id.to_owned())).await;
        }
+
+
+       self.blockchain.add_block(payload.block.data.to_owned(), payload.author_id.to_owned(), payload.block.timestamp, payload.block.index);
+
+       self.out_msg_tx.send(serde_json::to_string(&validator_payload).unwrap());
+       // self.p2p.send_block_to_nodes(payload); IDK MAKE METHOD TO SEND VALIDATOR BLOCK TO NODES
+       // add validator payload to queue that sends out
 
        Ok(is_block_good)
         
+    }
+
+    pub async fn ping(&mut self, peeridstr: &str) {
+        
+        let payload = reqres::GreetRequest {
+            message: "ping".to_string(),
+        };
+        
+        let peerid = PeerId::from_bytes(peeridstr.as_bytes()).unwrap();
+        self.p2p.behaviour.reqres.send_request(&peerid, payload);
+    
     }
 
     
