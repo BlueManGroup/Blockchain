@@ -65,8 +65,8 @@ pub struct Node {
    // pub node_list: // array med strings(?)
     pub blockchain: block::Blockchain,
     pub p2p: networking::p2p::P2p,
-    pub out_msg_tx: Sender<String>
-    
+    pub out_msg_tx: Sender<String>,
+    pub in_msg_rx: Receiver<String>
 
 }
 
@@ -107,7 +107,8 @@ impl Node {
             publickey,
             blockchain,
             p2p,
-            out_msg_tx
+            out_msg_tx,
+            in_msg_rx
         };
         node
     }
@@ -199,7 +200,7 @@ impl Node {
 
         let validator_payload: ValidatorPayload;
         let payload: Payload;
-        let out_msg: String;
+        let mut out_msg: String = String::new();
 
         // if validator payload enter this abomination
         if let Some(validator_sig) = deserialized_message.get("validator_id") {
@@ -233,6 +234,7 @@ impl Node {
 
             if self.p2p.known_nodes.iter().any(|(_, v)| *v == payload.author_id.to_owned()) {
                 is_block_good = true;
+                println!("block is good!!");
             } else {
                 return Ok((false))
             }
@@ -240,7 +242,7 @@ impl Node {
             //might create an error here, not sure
         
             validator_payload = self.create_validator_payload(message).unwrap();
-
+            
         }
         
         
@@ -248,16 +250,23 @@ impl Node {
        if !is_block_good {
             // give block boot and some other thingys
             self.p2p.give_node_the_boot((String::from("NULL"), payload.author_id.to_owned())).await;
+            println!("not is block good!");
        }
 
 
        self.blockchain.add_block(payload.block.data.to_owned(), payload.author_id.to_owned(), payload.block.timestamp, payload.block.index);
-
-       self.out_msg_tx.send(serde_json::to_string(&validator_payload).unwrap());
+       out_msg = serde_json::to_string(&validator_payload).unwrap();
+       println!("message sent to node(s): {:?}", out_msg);
+       self.out_msg_tx.send(serde_json::to_string(&out_msg).unwrap());
        // self.p2p.send_block_to_nodes(payload); IDK MAKE METHOD TO SEND VALIDATOR BLOCK TO NODES
        // add validator payload to queue that sends out
 
        Ok(is_block_good)
+        
+    }
+
+    pub fn check_inc_queue(&mut self) {
+        let msg = self.in_msg_rx.try_recv().unwrap();
         
     }
 
@@ -273,6 +282,24 @@ impl Node {
     }
 
     
+}
+
+
+
+
+#[async_std::main]
+async fn main() { 
+    let (inc_tx, inc_rx) = mpsc::channel();
+    let (out_tx, out_rx) = mpsc::channel();
+
+    let mut node = node::Node::new(inc_tx, inc_rx, out_tx, out_rx);
+
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
+   // let mut blockchain = block::Blockchain::new(rx);
+    //async_std::task::spawn(async move {node.blockchain.check_queue();});
 }
 
 

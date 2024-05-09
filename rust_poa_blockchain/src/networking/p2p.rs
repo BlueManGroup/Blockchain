@@ -1,4 +1,4 @@
-use async_std::fs::OpenOptions;
+
 use base64::{engine::general_purpose, Engine};
 use futures::prelude::*;
 use libp2p::Multiaddr;
@@ -10,16 +10,15 @@ use libp2p::floodsub::{FloodsubEvent, Topic};
 use libp2p::identity;
 use libp2p::identity::Keypair;
 use libp2p::PeerId; 
-use libp2p::mdns;
 use std::sync::mpsc::{Sender, Receiver}; 
 use std::env;
-//use std::str;
+//use std::str;x
 use dotenv::dotenv;
 use crate::networking::behaviour;
 use base64;
-use crate::node::Payload;
+use tokio::{io, io::AsyncBufReadExt, select};
+//use crate::Payload;
 //use crate::block::Block;
-
 
 pub struct P2p {
     pub swarm: Swarm<behaviour::Behaviour>,
@@ -29,7 +28,7 @@ pub struct P2p {
     pub listen_addr: Multiaddr,
     pub floodsub_topic: Topic,
     pub known_nodes: Vec<(String, String)>,
-    pub inc_msg_queue: Sender<String>,
+    pub inc_msg_queue: Sender<&[u8]>,
     pub out_msg_queue: Receiver<String>
 }
 
@@ -87,7 +86,7 @@ impl P2p{
         
 
         let mut swarm = libp2p::SwarmBuilder::with_existing_identity(identity_keys.clone())
-            .with_async_std()
+            .with_tokio()
             .with_tcp(
                 libp2p::tcp::Config::default(),
                 libp2p::tls::Config::new,
@@ -97,6 +96,7 @@ impl P2p{
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
         swarm.behaviour_mut().floodsub.subscribe(floodsub_topic.clone());
+        libp2p::Swarm::listen_on(&mut swarm, listen_addr.clone()).expect("Failed to listen on address");
         
         let p2p = P2p {
             swarm,
@@ -128,127 +128,101 @@ impl P2p{
             .find(|(node_key, _)| *node_key == key)
             .map(|(_, peer_id)| peer_id.clone())
     }
-    
 
     pub async fn p2phandler(&mut self) {
-    libp2p::Swarm::listen_on(&mut self.swarm, self.listen_addr.clone()).expect("Failed to listen on address");
-
-    if let Some(addr) = std::env::args().nth(1) {
-        let remote: Multiaddr = addr.parse().expect("Failed to parse remote address");
-        self.swarm.dial(remote).expect("Failed to dial remote address");
-        println!("Dialed {addr}")
-    };
-
-        loop {
+        match self.swarm.select_next_some().await {
             
+            //Write to console when listening on address
+            SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
 
+            //Handle inbound Floodsub messages
+            SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
+                println!("message received");
+                println!("Received:'{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
+                let test: &[u8] = &message.data;
+                self.inc_msg_queue.send(*test).expect("ooppssssiiiieeees");
+            },
 
+            //Handle inbound Floodsub subscriptions
+            SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
 
+                println!("Peer {:?} subscribed to '{:?}'", &peer_id, &topic);
+                let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
+                self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), message_str);
+            },
 
+            // //Mdns Handler, poorly optimised as it dials all known nodes on discovery, but maybe not?
+            // SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
+            //     for (peer_id, addr) in peers {
+            //         println!("Discovered: {:?} at {:?}", peer_id, addr);
+            //         self.known_nodes.push((peer_id.clone().to_string(), addr.to_string()));
+            //         self.swarm.dial(addr).expect("Failed to dial address");
+            //     }
+            // },
 
+            // SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
+            //     for (peer_id, addr) in peers {
+            //         println!("Expired: {:?} at {:?}", peer_id, addr);
+            //     }
+            // },
 
+            //Handle Identify events
+            SwarmEvent::Behaviour(behaviour::BehaviourEvent::Identify(event)) => {
+            
+                match event {
+                    libp2p::identify::Event::Received {info, peer_id} => {
+                        println!("Received: {:?} from {:?}", info, peer_id);
+                        self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
+                        self.known_nodes.push((peer_id.clone().to_string(), info.agent_version));
 
+                        let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
+                        self.swarm.behaviour_mut().floodsub.publish_any(self.floodsub_topic.clone(), message_str);
 
+                    },
+                    libp2p::identify::Event::Sent {peer_id} => {
+                        println!("Sent: {:?}", peer_id);
+                    },
+                    libp2p::identify::Event::Pushed {info, peer_id} => {
+                        println!("Pushed: {:?} from {:?}", info, peer_id )   
+                    },
+                    libp2p::identify::Event::Error { peer_id, error } => {
+                        println!("Error: {:?} from {:?}", error, peer_id);
+                    },
+                };
+                    
+                // swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
+            },
 
+            //handler for Request response
+            SwarmEvent::Behaviour(behaviour::BehaviourEvent::Reqres(event)) => {
 
+                match event {
+                    libp2p::request_response::Event::InboundFailure { peer, request_id, error } => {
+                        print!("Inbound failure: {:?}", error)
+                    },
+                    
+                    libp2p::request_response::Event::OutboundFailure { peer, request_id, error } => {
+                        print!("Outbound failure: {:?}", error)
+                    },
 
+                    libp2p::request_response::Event::Message { peer, message } => {
+                        print!("Message: {:?}", message)
+                    },
 
-
-            match self.swarm.select_next_some().await {
-                
-                //Write to console when listening on address
-                SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
-
-                //Handle inbound Floodsub messages
-                SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
-                    println!("message received");
-                    println!("Received:'{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
-                    let message_str = String::from_utf8_lossy(&message.data).into_owned();
-                    self.inc_msg_queue.send(message_str.clone()).expect("ooppssssiiiieeees");
-                },
-
-                //Handle inbound Floodsub subscriptions
-                SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
-
-                    println!("Peer {:?} subscribed to '{:?}'", &peer_id, &topic);
-                    let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
-                    self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), message_str);
-                },
-
-                // //Mdns Handler, poorly optimised as it dials all known nodes on discovery, but maybe not?
-                // SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
-                //     for (peer_id, addr) in peers {
-                //         println!("Discovered: {:?} at {:?}", peer_id, addr);
-                //         self.known_nodes.push((peer_id.clone().to_string(), addr.to_string()));
-                //         self.swarm.dial(addr).expect("Failed to dial address");
-                //     }
-                // },
-
-                // SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
-                //     for (peer_id, addr) in peers {
-                //         println!("Expired: {:?} at {:?}", peer_id, addr);
-                //     }
-                // },
-
-                //Handle Identify events
-                SwarmEvent::Behaviour(behaviour::BehaviourEvent::Identify(event)) => {
-                
-                    match event {
-                        libp2p::identify::Event::Received {info, peer_id} => {
-                            println!("Received: {:?} from {:?}", info, peer_id);
-                            self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
-                            self.known_nodes.push((peer_id.clone().to_string(), info.agent_version));
-
-                            let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
-                            self.swarm.behaviour_mut().floodsub.publish_any(self.floodsub_topic.clone(), message_str);
-
-                        },
-                        libp2p::identify::Event::Sent {peer_id} => {
-                            println!("Sent: {:?}", peer_id);
-                        },
-                        libp2p::identify::Event::Pushed {info, peer_id} => {
-                            println!("Pushed: {:?} from {:?}", info, peer_id )   
-                        },
-                        libp2p::identify::Event::Error { peer_id, error } => {
-                            println!("Error: {:?} from {:?}", error, peer_id);
-                        },
-                    };
-                        
-                    // swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
-                },
-
-                //handler for Request response
-                SwarmEvent::Behaviour(behaviour::BehaviourEvent::Reqres(event)) => {
-
-                    match event {
-                        libp2p::request_response::Event::InboundFailure { peer, request_id, error } => {
-                            print!("Inbound failure: {:?}", error)
-                        },
-                        
-                        libp2p::request_response::Event::OutboundFailure { peer, request_id, error } => {
-                            print!("Outbound failure: {:?}", error)
-                        },
-
-                        libp2p::request_response::Event::Message { peer, message } => {
-                            print!("Message: {:?}", message)
-                        },
-
-                        libp2p::request_response::Event::ResponseSent { peer, request_id } => {
-                            print!("Response sent: {:?}", request_id)
-                        }
+                    libp2p::request_response::Event::ResponseSent { peer, request_id } => {
+                        print!("Response sent: {:?}", request_id)
                     }
                 }
-                _ => {}
             }
-        
+            _ => {}
         }
     
     }
 
-    pub async fn send_block_to_nodes(&mut self, msg: Payload) -> Result<(),()> {
-        let block_str = serde_json::to_string(&msg).unwrap();
-        self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), block_str.as_bytes().to_owned());
-        println!("sent msg: {:?}", block_str);
+    pub async fn send_block_to_nodes(&mut self, msg: String) -> Result<(),()> {
+        //let block_str = serde_json::to_string(&msg).unwrap();
+        self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), msg.as_bytes().to_owned());
+        println!("sent msg: {:?}", msg);
         Ok(())
     }
 
@@ -274,16 +248,16 @@ impl P2p{
         //     // IKKE GODT VVVVV
         //     Err(e) => panic!("{}", e)
         // };
-        println!("HER!");
+        println!("node boot wooo maybe vi ser");
         if let Some(index) = self.known_nodes.iter().position(|(k, v)| *k == target_key || *v == target_ip) {
             self.known_nodes.remove(index);
-            println!("hvorfor er ddu der");
+            println!("node removed!!");
         }
         println!("known nodes: {:?}", self.known_nodes);
         let target_public_key = identity::PublicKey::try_decode_protobuf(target_key.as_bytes()).expect("error getting key from bytes");
         let target_peer_id = PeerId::from_public_key(&target_public_key);
         
-        println!("JEG NaaR HERTIL");
+        println!("node boot done :sunglasses:");
         
         self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&target_peer_id);
 
