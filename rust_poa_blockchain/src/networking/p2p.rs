@@ -28,12 +28,12 @@ pub struct P2p {
     pub listen_addr: Multiaddr,
     pub floodsub_topic: Topic,
     pub known_nodes: Vec<(String, String)>,
-    pub inc_msg_queue: Sender<[u8]>,
+    pub inc_msg_queue: Sender<Vec<u8>>,
     pub out_msg_queue: Receiver<String>
 }
 
 impl P2p{
-    pub fn new(inc_msg_queue: Sender<String>, out_msg_queue: Receiver<String>) -> Self {
+    pub fn new(inc_msg_queue: Sender<Vec<u8>>, out_msg_queue: Receiver<String>) -> Self {
         //let identity_keys= Keypair::generate_ed25519();
         dotenv().ok();
 
@@ -139,9 +139,31 @@ impl P2p{
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Message (message))) => {
                 println!("message received");
                 println!("Received:'{:?}' from {:?}", String::from_utf8_lossy(&message.data), &message.source);
-                let test: &[u8] = &message.data;
-                self.inc_msg_queue.send(*test).expect("ooppssssiiiieeees");
+                let msg_vec: Vec<u8> = message.data.to_vec();
+                self.inc_msg_queue.send(msg_vec).expect("error passing message to inc queue");
             },
+
+            //handler for Request response
+            SwarmEvent::Behaviour(behaviour::BehaviourEvent::Reqres(event)) => {
+
+                match event {
+                    libp2p::request_response::Event::InboundFailure { peer, request_id, error } => {
+                        print!("Inbound failure: {:?}", error)
+                    },
+                    
+                    libp2p::request_response::Event::OutboundFailure { peer, request_id, error } => {
+                        print!("Outbound failure: {:?}", error)
+                    },
+
+                    libp2p::request_response::Event::Message { peer, message } => {
+                        print!("Message: {:?}", message)
+                    },
+
+                    libp2p::request_response::Event::ResponseSent { peer, request_id } => {
+                        print!("Response sent: {:?}", request_id)
+                    }
+                }
+            }
 
             //Handle inbound Floodsub subscriptions
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
@@ -193,27 +215,7 @@ impl P2p{
                 // swarm.behaviour_mut().floodsub.add_node_to_partial_view(local_peer_id);
             },
 
-            //handler for Request response
-            SwarmEvent::Behaviour(behaviour::BehaviourEvent::Reqres(event)) => {
-
-                match event {
-                    libp2p::request_response::Event::InboundFailure { peer, request_id, error } => {
-                        print!("Inbound failure: {:?}", error)
-                    },
-                    
-                    libp2p::request_response::Event::OutboundFailure { peer, request_id, error } => {
-                        print!("Outbound failure: {:?}", error)
-                    },
-
-                    libp2p::request_response::Event::Message { peer, message } => {
-                        print!("Message: {:?}", message)
-                    },
-
-                    libp2p::request_response::Event::ResponseSent { peer, request_id } => {
-                        print!("Response sent: {:?}", request_id)
-                    }
-                }
-            }
+            
             _ => {}
         }
     

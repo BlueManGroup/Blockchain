@@ -66,12 +66,12 @@ pub struct Node {
     pub blockchain: block::Blockchain,
     pub p2p: networking::p2p::P2p,
     pub out_msg_tx: Sender<String>,
-    pub in_msg_rx: Receiver<String>
+    pub in_msg_rx: Receiver<Vec<u8>>
 
 }
 
 impl Node {
-    pub fn new(in_msg_tx: Sender<String>, in_msg_rx: Receiver<String>,  out_msg_tx: Sender<String>, out_msg_rx: Receiver<String> ) -> Self {
+    pub fn new(in_msg_tx: Sender<Vec<u8>>, in_msg_rx: Receiver<Vec<u8>>,  out_msg_tx: Sender<String>, out_msg_rx: Receiver<String> ) -> Self {
 
         
         // good for PoC, maybe bad for production
@@ -158,24 +158,24 @@ impl Node {
         Ok(payload)
     }
 
-    pub fn validate_block(&mut self, payload: Payload) -> Result<(bool), ()> {
+    pub async fn validate_block(&mut self, payload: Payload) -> Result<(bool), ()> {
         let validation_result = self.blockchain.is_block_valid(payload.block);
         // INDSÆT STIKPRØVER HER
 
         if validation_result == false {
-            self.p2p.give_node_the_boot((String::from("NULL"), payload.author_id));
+            self.p2p.give_node_the_boot((String::from("NULL"), payload.author_id)).await;
         }
         Ok((validation_result)) 
     }
 
-    pub fn create_validator_payload(&mut self, payload_bytes: &[u8]) -> Result<(ValidatorPayload),()> {
+    pub async fn create_validator_payload(&mut self, payload_bytes: &[u8]) -> Result<(ValidatorPayload),()> {
         let deseralized_payload = Node::deserialize_message(payload_bytes).unwrap();
-        let block_msg = Block::to_block(*deseralized_payload.get("block").unwrap());
+        let block_msg = Block::to_block(deseralized_payload.get("block").unwrap().to_owned());
         // let sig_msg_val = payload_msg.get("signature").unwrap();
         
         let payload = Payload::to_payload(deseralized_payload);
 
-        let validation_result = self.validate_block(payload.clone()).unwrap(); // HUSK MÅSKE AT ÆNDRE
+        let validation_result = self.validate_block(payload.clone()).await.unwrap(); // HUSK MÅSKE AT ÆNDRE
 
         let validator_payload;
         
@@ -241,7 +241,7 @@ impl Node {
             // THEN add to blockchain
             //might create an error here, not sure
         
-            validator_payload = self.create_validator_payload(message).unwrap();
+            validator_payload = self.create_validator_payload(message).await.unwrap();
             
         }
         
@@ -265,9 +265,9 @@ impl Node {
         
     }
 
-    pub fn check_inc_queue(&mut self) {
+    pub async fn check_inc_queue(&mut self) {
         let msg = self.in_msg_rx.try_recv().unwrap();
-        
+        let res = self.interpret_message(&msg);
     }
 
     pub async fn ping(&mut self, peeridstr: &str) {
@@ -287,20 +287,20 @@ impl Node {
 
 
 
-#[async_std::main]
-async fn main() { 
-    let (inc_tx, inc_rx) = mpsc::channel();
-    let (out_tx, out_rx) = mpsc::channel();
+// #[async_std::main]
+// async fn main() { 
+//     let (inc_tx, inc_rx) = mpsc::channel();
+//     let (out_tx, out_rx) = mpsc::channel();
 
-    let mut node = node::Node::new(inc_tx, inc_rx, out_tx, out_rx);
+//     let mut node = node::Node::new(inc_tx, inc_rx, out_tx, out_rx);
 
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+//     tracing_subscriber::fmt()
+//         .with_env_filter(EnvFilter::from_default_env())
+//         .init();
 
-   // let mut blockchain = block::Blockchain::new(rx);
-    //async_std::task::spawn(async move {node.blockchain.check_queue();});
-}
+//    // let mut blockchain = block::Blockchain::new(rx);
+//     //async_std::task::spawn(async move {node.blockchain.check_queue();});
+// }
 
 
 

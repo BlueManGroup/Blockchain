@@ -2,14 +2,13 @@
 use std::time::Duration;
 use futures::{
     future::FutureExt, // for `.fuse()`
-    pin_mut,
-    select,
 };
+use futures::stream::StreamExt;
 use tracing_subscriber::EnvFilter;
 use std::sync::{mpsc};
 use std::io::{self, Write};
 use libp2p::PeerId;
-use tokio::{io, io::AsyncBufReadExt, select};
+use tokio::{io as tio, io::AsyncBufReadExt, select};
 use std::error::Error;
 mod block;
 mod storage;
@@ -24,24 +23,40 @@ async fn main() -> Result<(), Box<dyn Error>>{
 
     let mut node = node::Node::new(inc_tx, inc_rx, out_tx, out_rx);
 
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
-        .init();
+        .try_init();
 
-    let mut stdin = io::BufReader::new(io::stdin()).lines();
+    let mut stdin = tio::BufReader::new(tio::stdin()).lines();
 
 
     loop {
         //main loop here
         select! {
             Ok(Some(line)) = stdin.next_line() => {
-                    
-                }   
-            msg = node.p2p.p2phandler() => {
-                
+                match line.as_str() {
+                    "list all" => {
+                        node.p2p.known_nodes.iter().for_each(|(peer_id, _)| {
+                            println!("Peer: {:?}", peer_id);
+                        });
+                        
+                    }
+                    "ping" => {
+                        println!("Pinging all peers");
+                        
+                    }
+                    _ => {
+                        println!("Invalid command");
+                    }
                 }
+            }   
+            _ = node.p2p.p2phandler() => {
+                
+            }
+            _ = node.check_inc_queue() => {
 
             }
+        }
 
         //     default => {
                 
