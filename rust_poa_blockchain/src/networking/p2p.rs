@@ -28,7 +28,7 @@ pub struct P2p {
     pub listen_addr: Multiaddr,
     pub floodsub_topic: Topic,
     pub known_nodes: Vec<(String, String)>,
-    pub inc_msg_queue: Sender<&[u8]>,
+    pub inc_msg_queue: Sender<[u8]>,
     pub out_msg_queue: Receiver<String>
 }
 
