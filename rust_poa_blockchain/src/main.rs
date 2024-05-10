@@ -35,8 +35,26 @@ async fn main() -> Result<(), Box<dyn Error>>{
                         
                     }
                     "ping" => {
+                        println!("ping one of following peers:");
+                        node.p2p.known_nodes.iter().for_each(|(peer_id, _)| {
+                            println!("Peer: {:?}", peer_id);
+                        });
+                        match(stdin.next_line().await) {
+                            Ok(Some(peer_id)) => {
+                                node.ping(&peer_id);
+                            }
+                            _ => {
+                                println!("Invalid peer id");
+                            }
+                        }
                         println!("Pinging all peers");
                         
+                    }
+                     "send block" => {
+                        println!("sending test block");
+                        let block = node.blockchain.new_local_block(String::from("poopie :D"));
+                        let payload = node.create_block_payload(block);
+                        node.send_block_to_validator(payload);                   
                     }
                     _ => {
                         println!("Invalid command");
@@ -44,6 +62,7 @@ async fn main() -> Result<(), Box<dyn Error>>{
                 }
             }   
             _ = node.p2p.p2phandler() => {
+                println!("p2phandler did something!");
                 node.check_inc_queue().await;
             }
             // _ = node.check_inc_queue() => {

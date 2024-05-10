@@ -10,6 +10,7 @@ use libp2p::floodsub::{FloodsubEvent, Topic};
 use libp2p::identity;
 use libp2p::identity::Keypair;
 use libp2p::PeerId; 
+use libp2p::mdns;
 use std::sync::mpsc::{Sender, Receiver}; 
 use std::env;
 //use std::str;x
@@ -32,6 +33,14 @@ pub struct P2p {
     pub out_msg_queue: Receiver<String>
 }
 
+fn parse_tuple_string(tuple_str: &str) -> Result<(String, String), &'static str> {
+    let parts: Vec<&str> = tuple_str.split(',').collect();
+    if parts.len() != 2 {
+        return Err("Invalid tuple format");
+    }
+    Ok((parts[0].trim().to_string(), parts[1].trim().to_string()))
+}   
+
 impl P2p{
     pub fn new(inc_msg_queue: Sender<Vec<u8>>, out_msg_queue: Receiver<String>) -> Self {
         //let identity_keys= Keypair::generate_ed25519();
@@ -51,6 +60,7 @@ impl P2p{
         let local_peer_id_decoded = general_purpose::STANDARD.decode(local_peer_id_b64);
         let local_peer_id = PeerId::from_bytes(&local_peer_id_decoded.unwrap());
         //let local_peer_id = PeerId::from_bytes(general_purpose::STANDARD.decode_slice(dotenv::var("PEER_ID").unwrap().as_bytes()));
+        println!("peer_id: {:?}", local_peer_id);
         let local_peer_id = match local_peer_id {
             Ok(peer_id) => peer_id,
             // IKKE GODT VVVVV
@@ -75,14 +85,14 @@ impl P2p{
 
 
         // idk publickey og peer_id eller sådan noget - husk at ændre boot method til at have samme format
-        let mut known_nodes: Vec<(String, String)> = {
-            let mut known_nodes = Vec::new();
-            known_nodes.push((dotenv::var("DILITHIUM3").unwrap(), dotenv::var("PEERID").unwrap()));
-            known_nodes};
-        // add random node values for debugging purposes
-        // REMEMBER TO REMOVE
-        // PUBLIC KEY DILITHIUM3, PEERID
-
+        let known_node_string = env::var("KNOWN_HOSTS").expect("Environment variable not found");
+        let known_nodes_raw: Vec<Result<(String, String), &str>> = known_node_string
+            .split(";")
+            .map(parse_tuple_string)
+            .collect();
+        let mut known_nodes: Vec<(String, String)> = known_nodes_raw.into_iter().filter_map(Result::ok).collect();
+        let me = (local_peer_id.to_string(), dotenv::var("PUBLICKEY").unwrap());
+        known_nodes.retain(|(peer_id, _)| peer_id != &me.0);
         
 
         let mut swarm = libp2p::SwarmBuilder::with_existing_identity(identity_keys.clone())
@@ -182,20 +192,26 @@ impl P2p{
                 self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), message_str);
             },
 
-            // //Mdns Handler, poorly optimised as it dials all known nodes on discovery, but maybe not?
-            // SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
-            //     for (peer_id, addr) in peers {
-            //         println!("Discovered: {:?} at {:?}", peer_id, addr);
-            //         self.known_nodes.push((peer_id.clone().to_string(), addr.to_string()));
-            //         self.swarm.dial(addr).expect("Failed to dial address");
-            //     }
-            // },
+            //Mdns Handler, poorly optimised as it dials all known nodes on discovery, but maybe not?
+            SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
+                for (peer_id, addr) in peers {
+                    println!("Discovered: {:?} at {:?}", peer_id, addr);
+                    let contains_node = self.known_nodes.iter().any(|&(ref known_peer, ref pub_key)| known_peer == &peer_id.to_string());
+                    if contains_node {
+                        println!("Node known");
+                        self.swarm.dial(addr).expect("Failed to dial address");
+                        self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
+                    } else {
+                        println!("Node unknown, has not been added to contact list");
+                    }   
+                }
+            },
 
-            // SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
-            //     for (peer_id, addr) in peers {
-            //         println!("Expired: {:?} at {:?}", peer_id, addr);
-            //     }
-            // },
+            SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
+                for (peer_id, addr) in peers {
+                    println!("Expired: {:?} at {:?}", peer_id, addr);
+                }
+            },
 
             //Handle Identify events
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Identify(event)) => {
@@ -204,7 +220,7 @@ impl P2p{
                     libp2p::identify::Event::Received {info, peer_id} => {
                         println!("Received: {:?} from {:?}", info, peer_id);
                         self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
-                        self.known_nodes.push((peer_id.clone().to_string(), info.agent_version));
+                    
 
                         let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
                         self.swarm.behaviour_mut().floodsub.publish_any(self.floodsub_topic.clone(), message_str);

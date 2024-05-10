@@ -129,19 +129,33 @@ impl Node {
     // }
 
     // select a random validator from the list of known nodes
-    pub fn select_validator(&self) -> std::io::Result<&(String, String)> {
-        if let Some(chosen_validator) = self.p2p.known_nodes.choose(&mut rand::thread_rng()) {
-            println!("validator randomly selected woooo: {:?}", &chosen_validator);
-            Ok(chosen_validator)
-        } else {
-            Err(io::Error::new(io::ErrorKind::Other, "error finding validator"))
-        }
+    pub fn select_validator(&self) -> std::io::Result<((String, String), (String, String))> {
+        // initialize random number generator
+        let mut rng = rand::thread_rng();
+        // select 2 validators randomly and make them to a vec of tuples
+        let validators: Vec<(String, String)> = self.p2p.known_nodes.choose_multiple(&mut rng, 2).cloned().collect(); 
+
+        // return the vec of tuples
+        Ok((validators[0].clone(), validators[1].clone()))
+        
     }
 
-    pub fn send_block_to_validator(&self, payload: Payload, dest: String) -> std::io::Result<()> {
+    // oh enough til en block!! woow
+    // lav blcok whoaaa
+    // lav en payload på denne bloc kwoooooot
+    // randomly vælg 2(?) seje guys
+    // send ud til disse seje guys!!! haha
+    // disse seje guys modtager og validerer dem!!!!!!!!!
+    // hvis ikke er du blevet bortvist!!!!!!
+    // de sender dem herefter videre til de resterende (mindre) seje guys
+
+    pub fn send_block_to_validator(&mut self, payload: Payload) -> std::io::Result<()> {
+        let validators = self.select_validator();
         
-        //self.p2p.known_nodes.get(&dest);
-        //self.p2p.swarm.dial
+        let serialized_payload = serde_json::to_string(&payload).unwrap();
+        let (validator1,validator2) = validators.unwrap();
+        self.send_message(validator1.0.as_str(), serialized_payload.as_str());
+        self.send_message(validator2.0.as_str(), serialized_payload.as_str());
         
         // BLOCK CREATOR BURDE MÅSKE CHECKE OM BLOCKEN ER SOM DET SKAL VÆRE INDEN DEN BLIVER SENDT TIL RESTEN AF NETVÆRKET
         // ^ikke helt enig længere, vi burde i stedet checke hos alle at hashet med blocken stemmer overens med hvad der står i signature
@@ -254,7 +268,7 @@ impl Node {
        }
 
 
-       self.blockchain.add_block(payload.block.data.to_owned(), payload.author_id.to_owned(), payload.block.timestamp, payload.block.index);
+       self.blockchain.add_block(payload.block.to_owned(), payload.author_id.to_owned());
        out_msg = serde_json::to_string(&validator_payload).unwrap();
        println!("message sent to node(s): {:?}", out_msg);
        self.out_msg_tx.send(serde_json::to_string(&out_msg).unwrap());
@@ -266,7 +280,10 @@ impl Node {
     }
 
     pub async fn check_inc_queue(&mut self) {
-        let msg = self.in_msg_rx.try_recv().unwrap();
+        let msg = self.in_msg_rx.try_recv().unwrap_or_default();
+        if msg == [0] {
+            return;
+        }
         let res = self.interpret_message(&msg);
     }
 
@@ -274,6 +291,17 @@ impl Node {
         
         let payload = reqres::GreetRequest {
             message: "ping".to_string(),
+        };
+        
+        let peerid = PeerId::from_bytes(peeridstr.as_bytes()).unwrap();
+        self.p2p.behaviour.reqres.send_request(&peerid, payload);
+    
+    }
+
+    pub async fn send_message(&mut self, peeridstr: &str, message: &str) {
+        
+        let payload = reqres::GreetRequest {
+            message: message.to_string()
         };
         
         let peerid = PeerId::from_bytes(peeridstr.as_bytes()).unwrap();

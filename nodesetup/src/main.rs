@@ -21,6 +21,7 @@ fn main() {
     let mut file = OpenOptions::new()
         .write(true)
         .append(true)
+        .create(true)
         .open("./src/.env")
         .expect("Unable to open file");
     println!("{:?}", file);
