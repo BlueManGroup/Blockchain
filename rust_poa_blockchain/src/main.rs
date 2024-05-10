@@ -1,29 +1,72 @@
-use std::time::Duration;
+
 use tracing_subscriber::EnvFilter;
 use std::sync::mpsc;
+use tokio::{io as tio, io::AsyncBufReadExt, select};
+use std::error::Error;
 mod block;
 mod storage;
 mod networking;
+mod node;
 
 
-#[async_std::main]
-async fn main() {
-    let (tx, rx) = mpsc::channel();    
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>>{ 
+    let (inc_tx, inc_rx) = mpsc::channel();
+    let (out_tx, out_rx) = mpsc::channel();
 
-    tracing_subscriber::fmt()
+    let mut node = node::Node::new(inc_tx, inc_rx, out_tx, out_rx);
+
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
-        .init();
+        .try_init();
 
-    let mut p2p = networking::p2p::P2p::new(tx);
-    async_std::task::spawn(async move {p2p.p2phandler().await;});
-    async_std::task::spawn(async move {
-        loop {
-            async_std::task::sleep(Duration::from_secs(1)).await;
-        }  
-    });
-    let mut blockchain = block::Blockchain::new(rx);
-    async_std::task::spawn(async move {blockchain.check_queue();});
-    
-    loop{}
-    
+    let mut stdin = tio::BufReader::new(tio::stdin()).lines();
+
+
+    loop {
+        //main loop here
+        select! {
+            Ok(Some(line)) = stdin.next_line() => {
+                match line.as_str() {
+                    "list all" => {
+                        node.p2p.known_nodes.iter().for_each(|(peer_id, _)| {
+                            println!("Peer: {:?}", peer_id);
+                        });
+                        
+                    }
+                    "ping" => {
+                        println!("Pinging all peers");
+                        
+                    }
+                    _ => {
+                        println!("Invalid command");
+                    }
+                }
+            }   
+            _ = node.p2p.p2phandler() => {
+                node.check_inc_queue().await;
+            }
+            // _ = node.check_inc_queue() => {
+
+            // }
+        }
+
+        //     default => {
+                
+        //     }
+            
+        // t1 => {
+        //     // Do work
+            
+    }
 }
+
+    // Main asks user what to do (Menu in a loop)
+    // - Do something that requires ownership of node.p2p
+    //   - asynchronously while listening for incoming messages
+
+    // while True:
+    //    Do work
+    //    Listen for incoming messages
+
+    //loop
