@@ -1,13 +1,6 @@
 
-use std::time::Duration;
-use futures::{
-    future::FutureExt, // for `.fuse()`
-};
-use futures::stream::StreamExt;
 use tracing_subscriber::EnvFilter;
-use std::sync::{mpsc};
-use std::io::{self, Write};
-use libp2p::PeerId;
+use std::sync::mpsc;
 use tokio::{io as tio, io::AsyncBufReadExt, select};
 use std::error::Error;
 mod block;
@@ -51,11 +44,11 @@ async fn main() -> Result<(), Box<dyn Error>>{
                 }
             }   
             _ = node.p2p.p2phandler() => {
-                
+                node.check_inc_queue().await;
             }
-            _ = node.check_inc_queue() => {
+            // _ = node.check_inc_queue() => {
 
-            }
+            // }
         }
 
         //     default => {

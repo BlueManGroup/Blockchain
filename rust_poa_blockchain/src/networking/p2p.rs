@@ -47,7 +47,7 @@ impl P2p{
         // };
 
         // fetch peer id (stored as b64) and convert it to peerid object
-        let local_peer_id_b64 = dotenv::var("PEER_ID").unwrap();
+        let local_peer_id_b64 = dotenv::var("P2P_PEER_ID").unwrap();
         let local_peer_id_decoded = general_purpose::STANDARD.decode(local_peer_id_b64);
         let local_peer_id = PeerId::from_bytes(&local_peer_id_decoded.unwrap());
         //let local_peer_id = PeerId::from_bytes(general_purpose::STANDARD.decode_slice(dotenv::var("PEER_ID").unwrap().as_bytes()));
@@ -61,9 +61,9 @@ impl P2p{
 
         //get libp2p identity keys from env file, deserialize for further use
         
-        let env_identity_keys_str = dotenv::var("P2P_IDENTITY_KEYS").unwrap();
-        let env_identity_keys = env_identity_keys_str.as_bytes();
-        let identity_keys = Keypair::from_protobuf_encoding(env_identity_keys).unwrap();
+        let env_identity_keys_b64 = dotenv::var("P2P_IDENTITY_KEYS").unwrap();
+        let env_identity_keys_bytes = general_purpose::STANDARD.decode(env_identity_keys_b64).unwrap();
+        let identity_keys = Keypair::from_protobuf_encoding(&env_identity_keys_bytes).unwrap();
 
     //     let env_identity_keys = dotenv::var("P2P_IDENTITY_KEYS").unwrap().as_bytes();
     //   let identity_keys = Keypair::from_protobuf_encoding(env_identity_keys).unwrap();
@@ -156,7 +156,16 @@ impl P2p{
                     },
 
                     libp2p::request_response::Event::Message { peer, message } => {
-                        print!("Message: {:?}", message)
+                        match message {
+                            libp2p::request_response::Message::Request { request_id, request, channel } => {
+                                println!("req_id: {:?}, req: {:?}, channel: {:?}, peer: {:?}", request_id, request, channel, peer);
+                                let msg_bytes = request.message.as_bytes().to_vec();
+                                self.inc_msg_queue.send(msg_bytes).expect("error passing message to inc queue");
+                            }
+                            libp2p::request_response::Message::Response { request_id, response } => {
+                                println!("req_id: {:?}, req: {:?}, peer: {:?}", request_id, response, peer);
+                            }
+                        }
                     },
 
                     libp2p::request_response::Event::ResponseSent { peer, request_id } => {
