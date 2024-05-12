@@ -192,8 +192,8 @@ impl P2p{
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
 
                 println!("Peer {:?} subscribed to '{:?}'", &peer_id, &topic);
-                let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
-                self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), message_str);
+                //let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
+                //self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), message_str);
             },
 
             //Mdns Handler, poorly optimised as it dials all known nodes on discovery, but maybe not?
@@ -227,12 +227,10 @@ impl P2p{
             
                 match event {
                     libp2p::identify::Event::Received {info, peer_id} => {
-                        println!("Received: {:?} from {:?}", info, peer_id);
-                        self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
-                    
+                        println!("Received: {:?} from {:?}", info, peer_id);                    
 
-                        let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
-                        self.swarm.behaviour_mut().floodsub.publish_any(self.floodsub_topic.clone(), message_str);
+                        // let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
+                        // self.swarm.behaviour_mut().floodsub.publish_any(self.floodsub_topic.clone(), message_str);
 
                     },
                     libp2p::identify::Event::Sent {peer_id} => {

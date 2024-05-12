@@ -34,15 +34,15 @@ fn main() {
     //  env::set_var("P2P_IDENTITY_KEYS", identity_keys_bytes.unwrap());
     
     let identity_keys_bytes = identity_keys.to_protobuf_encoding().unwrap();
-    let identity_keys_string = base64::encode(&identity_keys_bytes);
-    file.write_all(format!("P2P_IDENTITY_KEYS={}\n", identity_keys_string));
+    let identity_keys_string = general_purpose::STANDARD.encode(&identity_keys_bytes);
+    file.write_all(&identity_keys_string.as_bytes());
 
     //env::set_var("P2P_IDENTITY_KEYS", identity_keys_string);
 
     //set up peer id for libp2p (derived from libp2p identity keys)
     let peer_id_bytes = identity_keys.public().to_peer_id().to_bytes();
     let peer_id = general_purpose::STANDARD.encode(&peer_id_bytes);
-    file.write_all(format!("P2P_PEER_ID={}\n", peer_id));
+    file.write_all(format!("P2P_PEER_ID={}\n", peer_id).as_bytes());
 
     //set up dilithium keys
     let (publickey, secretkey) = dilithium3::keypair();
@@ -50,8 +50,8 @@ fn main() {
     let publickey_bytes = publickey.as_bytes();
 
 
-    file.write_all(format!("SECRETKEY={}\n", general_purpose::STANDARD.encode(secretkey_bytes)));
-    file.write_all(format!("PUBLICKEY={}\n", general_purpose::STANDARD.encode(publickey_bytes)));
+    file.write_all(format!("SECRETKEY={}\n", general_purpose::STANDARD.encode(secretkey_bytes)).as_bytes());
+    file.write_all(format!("PUBLICKEY={}\n", general_purpose::STANDARD.encode(publickey_bytes)).as_bytes());
 
 
     //set up known nodes table (peer id, dilithium pub key)
