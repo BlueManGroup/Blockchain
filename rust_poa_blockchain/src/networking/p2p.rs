@@ -60,16 +60,14 @@ impl P2p{
         // fetch peer id (stored as b64) and convert it to peerid object
         let local_peer_id_b64 = dotenv::var("P2P_PEER_ID").unwrap();
         let local_peer_id_decoded = general_purpose::STANDARD.decode(local_peer_id_b64);
-        let local_peer_id = PeerId::from_bytes(&local_peer_id_decoded.unwrap());
+        let local_peer_id = PeerId::from_bytes(&local_peer_id_decoded.unwrap()).unwrap();
         //let local_peer_id = PeerId::from_bytes(general_purpose::STANDARD.decode_slice(dotenv::var("PEER_ID").unwrap().as_bytes()));
         println!("peer_id: {:?}", local_peer_id);
-        let local_peer_id = match local_peer_id {
-            Ok(peer_id) => peer_id,
-            // IKKE GODT VVVVV
-            Err(e) => panic!("{}", e)
-        };
-
-    
+        // let local_peer_id = match local_peer_id {
+        //     Ok(peer_id) => peer_id,
+        //     // IKKE GODT VVVVV
+        //     Err(e) => panic!("{}", e)
+        // };
 
         //get libp2p identity keys from env file, deserialize for further use
         
@@ -93,7 +91,7 @@ impl P2p{
             .map(parse_tuple_string)
             .collect();
         let mut known_nodes: Vec<(Vec<u8>, Vec<u8>)> = known_nodes_raw.into_iter().filter_map(Result::ok).collect();
-        println!("known nodes: {:?}", known_nodes);
+        // println!("known nodes: {:?}", known_nodes);
         let me = (local_peer_id.to_string(), dotenv::var("PUBLICKEY").unwrap());
         let me_decoded = general_purpose::STANDARD.decode(me.0).unwrap();
         known_nodes.retain(|(peer_id, _)| peer_id != &me_decoded);
@@ -199,12 +197,12 @@ impl P2p{
             //Mdns Handler, poorly optimised as it dials all known nodes on discovery, but maybe not?
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
                 for (peer_id, addr) in peers {
-                    println!("Discovered: {:?} at {:?}", peer_id, addr);
+                    println!("Discovered: {:?}", peer_id);
                     let contains_node = self.known_nodes.iter().any(|&(ref known_peer, _)| known_peer == &peer_id.to_bytes());
                     
-                    for (peerid, _) in &self.known_nodes {
-                        println!("peerid in contacts: {:?} \tpeerid discovered: {:?} \t match: {:?}", peerid, peer_id.to_bytes(), peerid == &peer_id.to_bytes());
-                    }
+                    // for (peerid, _) in &self.known_nodes {
+                    //     println!("peerid in contacts: {:?} \tpeerid discovered: {:?} \t match: {:?}", peerid, peer_id.to_bytes(), peerid == &peer_id.to_bytes());
+                    // }
 
                     if contains_node {
                         println!("Node known");

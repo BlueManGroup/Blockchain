@@ -281,7 +281,6 @@ impl Node {
 
     pub async fn check_inc_queue(&mut self) {
         let msg = self.in_msg_rx.try_recv().unwrap_or_default();
-        println!("checked queue");
         if msg.is_empty() {
             return;
         }

@@ -56,13 +56,18 @@ async fn main() -> Result<(), Box<dyn Error>>{
                         let payload = node.create_block_payload(block);
                         node.send_block_to_validator(payload).await.unwrap();                   
                     }
+                    "list peers" => {
+                        node.p2p.known_nodes.iter().for_each(|(peer_id, _)| {
+                            println!("Peer: {:?}", String::from_utf8(peer_id.to_owned()).unwrap());
+                        });
+                    }
                     _ => {
                         println!("Invalid command");
                     }
                 }
             }   
             _ = node.p2p.p2phandler() => {
-                println!("p2phandler did something!");
+                // println!("p2phandler did something!");
                 node.check_inc_queue().await;
             }
             // _ = node.check_inc_queue() => {
