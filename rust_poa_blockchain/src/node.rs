@@ -312,33 +312,3 @@ impl Node {
 
     
 }
-
-
-
-
-// #[async_std::main]
-// async fn main() { 
-//     let (inc_tx, inc_rx) = mpsc::channel();
-//     let (out_tx, out_rx) = mpsc::channel();
-
-//     let mut node = node::Node::new(inc_tx, inc_rx, out_tx, out_rx);
-
-//     tracing_subscriber::fmt()
-//         .with_env_filter(EnvFilter::from_default_env())
-//         .init();
-
-//    // let mut blockchain = block::Blockchain::new(rx);
-//     //async_std::task::spawn(async move {node.blockchain.check_queue();});
-// }
-
-
-
-
-/*
-ids = public keys
-Payload: block, creatorID
-    Hash: Payload
-Signature: Hash + encrypted with private key
-Validator Id
-validator signature
-*/

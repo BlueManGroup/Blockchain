@@ -93,6 +93,7 @@ impl P2p{
             .map(parse_tuple_string)
             .collect();
         let mut known_nodes: Vec<(Vec<u8>, Vec<u8>)> = known_nodes_raw.into_iter().filter_map(Result::ok).collect();
+        println!("known nodes: {:?}", known_nodes);
         let me = (local_peer_id.to_string(), dotenv::var("PUBLICKEY").unwrap());
         let me_decoded = general_purpose::STANDARD.decode(me.0).unwrap();
         known_nodes.retain(|(peer_id, _)| peer_id != &me_decoded);
@@ -161,11 +162,11 @@ impl P2p{
 
                 match event {
                     libp2p::request_response::Event::InboundFailure { peer, request_id, error } => {
-                        print!("Inbound failure: {:?}", error)
+                        println!("Inbound failure: {:?}", error)
                     },
                     
                     libp2p::request_response::Event::OutboundFailure { peer, request_id, error } => {
-                        print!("Outbound failure: {:?}", error)
+                        println!("Outbound failure: {:?}", error)
                     },
 
                     libp2p::request_response::Event::Message { peer, message } => {
@@ -182,7 +183,7 @@ impl P2p{
                     },
 
                     libp2p::request_response::Event::ResponseSent { peer, request_id } => {
-                        print!("Response sent: {:?}", request_id)
+                        println!("Response sent: {:?}", request_id)
                     }
                 }
             }
@@ -200,6 +201,11 @@ impl P2p{
                 for (peer_id, addr) in peers {
                     println!("Discovered: {:?} at {:?}", peer_id, addr);
                     let contains_node = self.known_nodes.iter().any(|&(ref known_peer, _)| known_peer == &peer_id.to_bytes());
+                    
+                    for (peerid, _) in &self.known_nodes {
+                        println!("peerid in contacts: {:?} \tpeerid discovered: {:?} \t match: {:?}", peerid, peer_id.to_bytes(), peerid == &peer_id.to_bytes());
+                    }
+
                     if contains_node {
                         println!("Node known");
                         self.swarm.dial(addr).expect("Failed to dial address");
