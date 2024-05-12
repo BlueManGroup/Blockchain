@@ -206,23 +206,31 @@ impl P2p{
                         // println!("known peer: {}\npeer_id: {}",known_to_peer, peer_id);
                         if *known_peer == peer_id.to_bytes() {
                             contains_node = true;
-                            break
+                            break;
                         }
                     }
                     
                     // for (peerid, _) in &self.known_nodes {
                     //     println!("peerid in contacts: {:?} \tpeerid discovered: {:?} \t match: {:?}", peerid, peer_id.to_bytes(), peerid == &peer_id.to_bytes());
                     // }
+                    
 
                     if contains_node {
+                        for connected_peer in self.swarm.external_addresses() {
+                            println!("external address: {:?}", connected_peer);
+                        }
                         println!("Node known");
-                        self.swarm.dial(addr.to_owned()).expect("Failed to dial address");
+                        self.swarm.add_external_address(addr.clone());
+                        self.swarm.dial(peer_id).expect("Failed to dial address");
                         self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
-                        self.swarm.add_peer_address(peer_id, addr.clone());
+                        println!("node is connected: {:?}", self.swarm.is_connected(&peer_id));
                     } else {
                         println!("Node unknown, has not been added to contact list");
                     }   
                 }
+
+                println!("finished");
+                
             },
 
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
