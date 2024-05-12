@@ -3,6 +3,7 @@ use tracing_subscriber::EnvFilter;
 use std::sync::mpsc;
 use tokio::{io as tio, io::AsyncBufReadExt, select};
 use std::error::Error;
+use libp2p;
 mod block;
 mod storage;
 mod networking;
@@ -58,7 +59,8 @@ async fn main() -> Result<(), Box<dyn Error>>{
                     }
                     "list peers" => {
                         node.p2p.known_nodes.iter().for_each(|(peer_id, _)| {
-                            println!("Peer: {:?}", String::from_utf8(peer_id.to_owned()).unwrap());
+                            let peer_id_parsed = libp2p::PeerId::from_bytes(peer_id).unwrap();
+                            println!("Peer: {:?}", peer_id_parsed);
                         });
                     }
                     _ => {
