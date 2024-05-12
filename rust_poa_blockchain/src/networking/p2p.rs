@@ -80,7 +80,7 @@ impl P2p{
 
         let behaviour = behaviour::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
         let behaviour2 = behaviour::Behaviour::new(identity_keys.public(), local_peer_id.clone()).expect("Failed to create behaviour");
-        let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().expect("Failed to parse listen address");
+        let listen_addr: Multiaddr = "/ip4/127.0.0.1/tcp/0".parse().expect("Failed to parse listen address");
         let floodsub_topic: Topic = Topic::new("blockchain".to_string());
 
 
@@ -221,6 +221,7 @@ impl P2p{
                         }
                         println!("Node known");
                         self.swarm.add_external_address(addr.clone());
+                        println!("current address: {:?}", addr);
                         self.swarm.dial(peer_id).expect("Failed to dial address");
                         self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
                         println!("node is connected: {:?}", self.swarm.is_connected(&peer_id));
