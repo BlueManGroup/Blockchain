@@ -35,7 +35,7 @@ fn main() {
     
     let identity_keys_bytes = identity_keys.to_protobuf_encoding().unwrap();
     let identity_keys_string = general_purpose::STANDARD.encode(&identity_keys_bytes);
-    file.write_all(&identity_keys_string.as_bytes());
+    file.write_all(format!("P2P_IDENTITY_KEYS={}\n", &identity_keys_string).as_bytes());
 
     //env::set_var("P2P_IDENTITY_KEYS", identity_keys_string);
 
