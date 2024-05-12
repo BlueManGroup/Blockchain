@@ -57,6 +57,7 @@ impl FileTracker{
                 }
             }
             self.cur_block = biggest + 1;
+            println!("cur_block: {:?}", self.cur_block);
             return;
         } else {
             eprintln!("No files found matching the pattern");

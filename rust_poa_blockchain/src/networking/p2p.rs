@@ -33,12 +33,14 @@ pub struct P2p {
     pub out_msg_queue: Receiver<String>
 }
 
-fn parse_tuple_string(tuple_str: &str) -> Result<(String, String), &'static str> {
+fn parse_tuple_string(tuple_str: &str) -> Result<(String, String), &str> {
     let parts: Vec<&str> = tuple_str.split(',').collect();
     if parts.len() != 2 {
         return Err("Invalid tuple format");
     }
-    Ok((parts[0].trim().to_string(), parts[1].trim().to_string()))
+    let peerid = general_purpose::STANDARD.decode(parts[0].trim().to_string()).unwrap();
+    let pubkey = general_purpose::STANDARD.decode(parts[1].trim().to_string()).unwrap();
+    Ok((String::from_utf8(peerid).unwrap(), String::from_utf8(pubkey).unwrap()))
 }   
 
 impl P2p{
