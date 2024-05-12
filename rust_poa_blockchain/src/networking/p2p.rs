@@ -91,7 +91,7 @@ impl P2p{
             .map(parse_tuple_string)
             .collect();
         let mut known_nodes: Vec<(Vec<u8>, Vec<u8>)> = known_nodes_raw.into_iter().filter_map(Result::ok).collect();
-        // println!("known nodes: {:?}", known_nodes);
+        // println!("known nodes: {:?}", known_node_string);
         let me = (local_peer_id.to_string(), dotenv::var("PUBLICKEY").unwrap());
         let me_decoded = general_purpose::STANDARD.decode(me.0).unwrap();
         known_nodes.retain(|(peer_id, _)| peer_id != &me_decoded);
@@ -198,7 +198,17 @@ impl P2p{
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
                 for (peer_id, addr) in peers {
                     println!("Discovered: {:?}", peer_id);
-                    let contains_node = self.known_nodes.iter().any(|(ref known_peer, _)| *known_peer == peer_id.to_bytes());
+                    //let contains_node = self.known_nodes.iter().any(|(ref known_peer, _)| *known_peer == peer_id.to_bytes());
+
+                    let mut contains_node = false;
+                    for (ref known_peer, _) in self.known_nodes.to_owned() {
+                        // let known_to_peer = PeerId::from_bytes(known_peer).unwrap();
+                        // println!("known peer: {}\npeer_id: {}",known_to_peer, peer_id);
+                        if *known_peer == peer_id.to_bytes() {
+                            contains_node = true;
+                            break
+                        }
+                    }
                     
                     // for (peerid, _) in &self.known_nodes {
                     //     println!("peerid in contacts: {:?} \tpeerid discovered: {:?} \t match: {:?}", peerid, peer_id.to_bytes(), peerid == &peer_id.to_bytes());
@@ -225,20 +235,20 @@ impl P2p{
             
                 match event {
                     libp2p::identify::Event::Received {info, peer_id} => {
-                        println!("Received: {:?} from {:?}", info, peer_id);                    
+                        // println!("Received: {:?} from {:?}", info, peer_id);                    
 
                         // let message_str = format!("Hello {}", peer_id.clone().to_string()).into_bytes();
                         // self.swarm.behaviour_mut().floodsub.publish_any(self.floodsub_topic.clone(), message_str);
 
                     },
                     libp2p::identify::Event::Sent {peer_id} => {
-                        println!("Sent: {:?}", peer_id);
+                        // println!("Sent: {:?}", peer_id);
                     },
                     libp2p::identify::Event::Pushed {info, peer_id} => {
-                        println!("Pushed: {:?} from {:?}", info, peer_id )   
+                        // println!("Pushed: {:?} from {:?}", info, peer_id )   
                     },
                     libp2p::identify::Event::Error { peer_id, error } => {
-                        println!("Error: {:?} from {:?}", error, peer_id);
+                        // println!("Error: {:?} from {:?}", error, peer_id);
                     },
                 };
                     

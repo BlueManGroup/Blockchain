@@ -288,13 +288,13 @@ impl Node {
         println!("block validated: {:?}", res);
     }
 
-    pub async fn ping(&mut self, peeridstr: &str) {
+    pub async fn ping(&mut self, peerid_bytes: Vec<u8>) {
         
         let payload = reqres::GreetRequest {
             message: "ping".to_string(),
         };
         
-        let peerid = PeerId::from_bytes(peeridstr.as_bytes()).unwrap();
+        let peerid = PeerId::from_bytes(&peerid_bytes).unwrap();
         self.p2p.behaviour.reqres.send_request(&peerid, payload);
     
     }

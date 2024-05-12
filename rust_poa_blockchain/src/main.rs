@@ -34,24 +34,27 @@ async fn main() -> Result<(), Box<dyn Error>>{
                             println!("Peer: {:?}", peer_id);
                         });
                         
-                    }
+                    }  
                     "ping" => {
                         println!("ping one of following peers:");
+                        let mut count: usize = 0;
                         node.p2p.known_nodes.iter().for_each(|(peer_id, _)| {
-                            println!("Peer: {:?}", peer_id);
+                            let peer_id_parsed = libp2p::PeerId::from_bytes(peer_id).unwrap();
+                            println!("Peer {}: {:?}", count, peer_id_parsed);
+                            count = count + 1;
                         });
-                        match stdin.next_line().await {
-                            Ok(Some(peer_id)) => {
-                                node.ping(&peer_id).await;
-                            }
-                            _ => {
-                                println!("Invalid peer id");
-                            }
+                        let input = stdin.next_line().await.unwrap().unwrap();
+                        let parsed_input = input.parse::<usize>().unwrap();
+                        if parsed_input >= count {
+                            println!("Invalid peer");
+                            continue;
+                        } else {
+                            let remote_peer = node.p2p.known_nodes[parsed_input].0.to_owned();
+                            node.ping(remote_peer);
+                            println!("tried to ping peer wooooo");
                         }
-                        println!("Pinging all peers");
-                        
                     }
-                     "send block" => {
+                    "send block" => {
                         println!("sending test block");
                         let block = node.blockchain.new_local_block(String::from("poopie :D"));
                         let payload = node.create_block_payload(block);
@@ -67,15 +70,16 @@ async fn main() -> Result<(), Box<dyn Error>>{
                         println!("Invalid command");
                     }
                 }
-            }   
+            }
             _ = node.p2p.p2phandler() => {
                 // println!("p2phandler did something!");
                 node.check_inc_queue().await;
+            
             }
             // _ = node.check_inc_queue() => {
 
-            // }
-        }
+        //}
+  //  }
 
         //     default => {
                 
@@ -84,6 +88,7 @@ async fn main() -> Result<(), Box<dyn Error>>{
         // t1 => {
         //     // Do work
             
+        }
     }
 }
 
