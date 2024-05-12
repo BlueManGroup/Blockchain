@@ -198,7 +198,7 @@ impl P2p{
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
                 for (peer_id, addr) in peers {
                     println!("Discovered: {:?}", peer_id);
-                    let contains_node = self.known_nodes.iter().any(|&(ref known_peer, _)| known_peer == &peer_id.to_bytes());
+                    let contains_node = self.known_nodes.iter().any(|(ref known_peer, _)| *known_peer == peer_id.to_bytes());
                     
                     // for (peerid, _) in &self.known_nodes {
                     //     println!("peerid in contacts: {:?} \tpeerid discovered: {:?} \t match: {:?}", peerid, peer_id.to_bytes(), peerid == &peer_id.to_bytes());
