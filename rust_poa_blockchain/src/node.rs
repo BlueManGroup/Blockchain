@@ -2,13 +2,13 @@ use std::env;
 use crate::{block, networking};
 use std::sync::mpsc::{Sender, Receiver};
 use pqcrypto_dilithium::dilithium3;
-use pqcrypto_traits::sign::{PublicKey,SecretKey, SignedMessage};
+use pqcrypto_traits::sign::{PublicKey,SecretKey};
 use base64::{engine::general_purpose, Engine};
 use rand::seq::SliceRandom;
-use std::io;
-use sha2::{Digest};
-use crate::block::Block;
-use serde_json::Value;
+//use std::io;
+// use sha2::{Digest};
+// use crate::block::Block;
+// use serde_json::Value;
 use serde::{Serialize, Deserialize};
 use libp2p::PeerId; 
 use crate::networking::reqres;
@@ -33,6 +33,7 @@ impl Payload {
     }
 
     pub fn to_payload(value: serde_json::Value) -> Payload {
+        println!("topayload tries this: {:?}", value);
         serde_json::from_value(value).unwrap()
     }
 }
@@ -280,7 +281,7 @@ impl Node {
 
     pub async fn check_inc_queue(&mut self) {
         let msg = self.in_msg_rx.try_recv().unwrap_or_default();
-        if msg == [0] {
+        if msg.is_empty() {
             return;
         }
         let res = self.interpret_message(&msg).await.unwrap();
