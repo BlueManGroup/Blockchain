@@ -216,8 +216,9 @@ impl P2p{
 
                     if contains_node {
                         println!("Node known");
-                        self.swarm.dial(addr).expect("Failed to dial address");
+                        self.swarm.dial(addr.to_owned()).expect("Failed to dial address");
                         self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
+                        self.swarm.add_peer_address(peer_id, addr.clone());
                     } else {
                         println!("Node unknown, has not been added to contact list");
                     }   
