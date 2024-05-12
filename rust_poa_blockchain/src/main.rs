@@ -39,9 +39,9 @@ async fn main() -> Result<(), Box<dyn Error>>{
                         node.p2p.known_nodes.iter().for_each(|(peer_id, _)| {
                             println!("Peer: {:?}", peer_id);
                         });
-                        match(stdin.next_line().await) {
+                        match stdin.next_line().await {
                             Ok(Some(peer_id)) => {
-                                node.ping(&peer_id);
+                                node.ping(&peer_id).await;
                             }
                             _ => {
                                 println!("Invalid peer id");
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>>{
                         println!("sending test block");
                         let block = node.blockchain.new_local_block(String::from("poopie :D"));
                         let payload = node.create_block_payload(block);
-                        node.send_block_to_validator(payload);                   
+                        node.send_block_to_validator(payload).await.unwrap();                   
                     }
                     _ => {
                         println!("Invalid command");

@@ -80,17 +80,20 @@ impl Blockchain {
             return;
         }
 
-        storage::append_blocks_to_file(&[&block], &mut self.file_tracker);
+        storage::append_blocks_to_file(&[&block], &mut self.file_tracker).unwrap();
         self.chain.push(block);
         println!("tracker in blocks after increment: {}", self.file_tracker.cur_enum);
         self.file_tracker.cur_block += 1 ;
         println!("cur_block: {}", self.file_tracker.cur_block);
     }
 
+    pub fn init_file_tracker(&mut self) {
+        self.file_tracker.find_file();
+    }
+
     // call when enough votes to construct a whole block.
     // adds block to local chain, doesn't yet push to other nodes
     pub fn new_local_block(&mut self, data: String) -> Block {
-        self.file_tracker.find_file();
         println!("current block: {}", self.file_tracker.cur_block);
 
         let prev_block = &self.chain[self.chain.len() - 1];
@@ -101,7 +104,7 @@ impl Blockchain {
             data,
         );
 
-        storage::append_blocks_to_file(&[&new_block], &mut self.file_tracker);
+        storage::append_blocks_to_file(&[&new_block], &mut self.file_tracker).unwrap();
         self.chain.push(new_block.to_owned());
         println!("tracker in blocks after increment: {}", self.file_tracker.cur_enum);
         self.file_tracker.cur_block += 1 ;

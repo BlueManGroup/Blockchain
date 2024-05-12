@@ -96,7 +96,7 @@ pub fn append_blocks_to_file(blocks: &[&Block], file_tracker: &mut FileTracker) 
         
     }
 
-    file.sync_all();
+    file.sync_all().unwrap();
     println!("file size:{}",file_len);
 
     Ok(())

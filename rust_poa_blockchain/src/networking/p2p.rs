@@ -17,7 +17,7 @@ use std::env;
 use dotenv::dotenv;
 use crate::networking::behaviour;
 use base64;
-use tokio::{io, io::AsyncBufReadExt, select};
+//use tokio::{io, io::AsyncBufReadExt, select};
 //use crate::Payload;
 //use crate::block::Block;
 
@@ -28,19 +28,19 @@ pub struct P2p {
     pub identity_keys: identity::Keypair,
     pub listen_addr: Multiaddr,
     pub floodsub_topic: Topic,
-    pub known_nodes: Vec<(String, String)>,
+    pub known_nodes: Vec<(Vec<u8>,Vec<u8>)>,
     pub inc_msg_queue: Sender<Vec<u8>>,
     pub out_msg_queue: Receiver<String>
 }
 
-fn parse_tuple_string(tuple_str: &str) -> Result<(String, String), &str> {
+fn parse_tuple_string(tuple_str: &str) -> Result<(Vec<u8>, Vec<u8>), &str> {
     let parts: Vec<&str> = tuple_str.split(',').collect();
     if parts.len() != 2 {
         return Err("Invalid tuple format");
     }
     let peerid = general_purpose::STANDARD.decode(parts[0].trim().to_string()).unwrap();
     let pubkey = general_purpose::STANDARD.decode(parts[1].trim().to_string()).unwrap();
-    Ok((String::from_utf8(peerid).unwrap(), String::from_utf8(pubkey).unwrap()))
+    Ok((peerid, pubkey))
 }   
 
 impl P2p{
@@ -88,13 +88,14 @@ impl P2p{
 
         // idk publickey og peer_id eller sådan noget - husk at ændre boot method til at have samme format
         let known_node_string = env::var("KNOWN_HOSTS").expect("Environment variable not found");
-        let known_nodes_raw: Vec<Result<(String, String), &str>> = known_node_string
+        let known_nodes_raw: Vec<Result<(Vec<u8>, Vec<u8>), &str>> = known_node_string
             .split(";")
             .map(parse_tuple_string)
             .collect();
-        let mut known_nodes: Vec<(String, String)> = known_nodes_raw.into_iter().filter_map(Result::ok).collect();
+        let mut known_nodes: Vec<(Vec<u8>, Vec<u8>)> = known_nodes_raw.into_iter().filter_map(Result::ok).collect();
         let me = (local_peer_id.to_string(), dotenv::var("PUBLICKEY").unwrap());
-        known_nodes.retain(|(peer_id, _)| peer_id != &me.0);
+        let me_decoded = general_purpose::STANDARD.decode(me.0).unwrap();
+        known_nodes.retain(|(peer_id, _)| peer_id != &me_decoded);
         
 
         let mut swarm = libp2p::SwarmBuilder::with_existing_identity(identity_keys.clone())
@@ -126,7 +127,7 @@ impl P2p{
 
     //iterate over vector to find entry where ip == ip we're looking for
     //then get the peer id at the same index (technically not that but w/e) 
-    pub fn get_key_from_peer_id(&self, peer_id: String) -> Option<String> {
+    pub fn get_key_from_peer_id(&self, peer_id: Vec<u8>) -> Option<Vec<u8>> {
         self.known_nodes
             .iter()
             .find(|(_, node_peer)| *node_peer == peer_id)
@@ -134,7 +135,7 @@ impl P2p{
     }
 
     //((((((reverse version of the above method))))))
-    pub fn get_peer_id_from_key(&self, key: String) -> Option<String> {
+    pub fn get_peer_id_from_key(&self, key: Vec<u8>) -> Option<Vec<u8>> {
         self.known_nodes
             .iter()
             .find(|(node_key, _)| *node_key == key)
@@ -198,7 +199,7 @@ impl P2p{
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
                 for (peer_id, addr) in peers {
                     println!("Discovered: {:?} at {:?}", peer_id, addr);
-                    let contains_node = self.known_nodes.iter().any(|&(ref known_peer, ref pub_key)| known_peer == &peer_id.to_string());
+                    let contains_node = self.known_nodes.iter().any(|&(ref known_peer, _)| known_peer == &peer_id.to_bytes());
                     if contains_node {
                         println!("Node known");
                         self.swarm.dial(addr).expect("Failed to dial address");
@@ -257,11 +258,11 @@ impl P2p{
 
     // pub async fn 
     // target = (dilithiumkey, peerid)
-    
-    pub async fn give_node_the_boot(&mut self, target: (String, String)) -> Result<(),()> {
+    //
+    pub async fn give_node_the_boot(&mut self, target: (Vec<u8>, Vec<u8>)) -> Result<(),()> {
         let target_ip; 
         let target_key;
-        if target.0 != "NULL" {
+        if target.0.is_empty() {
             target_ip = self.get_peer_id_from_key(target.0.clone()).unwrap();
             target_key = target.0;
         } else {
@@ -283,7 +284,7 @@ impl P2p{
             println!("node removed!!");
         }
         println!("known nodes: {:?}", self.known_nodes);
-        let target_public_key = identity::PublicKey::try_decode_protobuf(target_key.as_bytes()).expect("error getting key from bytes");
+        let target_public_key = identity::PublicKey::try_decode_protobuf(&target_key).expect("error getting key from bytes");
         let target_peer_id = PeerId::from_public_key(&target_public_key);
         
         println!("node boot done :sunglasses:");
