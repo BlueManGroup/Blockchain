@@ -1,6 +1,8 @@
 
 use base64::{engine::general_purpose, Engine};
 use futures::prelude::*;
+use libp2p::swarm::dial_opts::DialOpts;
+use libp2p::swarm::dial_opts::PeerCondition;
 use libp2p::Multiaddr;
 use libp2p::swarm::SwarmEvent;
 use libp2p::swarm::Swarm;
@@ -222,7 +224,10 @@ impl P2p{
                         println!("Node known");
                         self.swarm.add_external_address(addr.clone());
                         println!("current address: {:?}", addr);
-                        // self.swarm.dial(peer_id).expect("Failed to dial address");
+                        let opts = DialOpts::peer_id(peer_id.clone())
+                            .condition(PeerCondition::Always)
+                            .build();
+                        self.swarm.dial(opts).expect("Failed to dial address");
                         self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
                         println!("node is connected: {:?}", self.swarm.is_connected(&peer_id));
                     } else {
