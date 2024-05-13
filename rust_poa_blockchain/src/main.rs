@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>>{
                             continue;
                         } else {
                             let remote_peer = node.p2p.known_nodes[parsed_input].0.to_owned();
-                            node.ping(remote_peer);
+                            node.ping(remote_peer).await;
                             println!("tried to ping peer wooooo");
                         }
                     }
@@ -64,6 +64,11 @@ async fn main() -> Result<(), Box<dyn Error>>{
                         node.p2p.known_nodes.iter().for_each(|(peer_id, _)| {
                             let peer_id_parsed = libp2p::PeerId::from_bytes(peer_id).unwrap();
                             println!("Peer: {:?}", peer_id_parsed);
+                        });
+                    }
+                    "list swarm contacts" => {
+                        node.p2p.swarm.external_addresses().for_each(|addr| {
+                            println!("Swarm contact: {:?}", addr);
                         });
                     }
                     _ => {

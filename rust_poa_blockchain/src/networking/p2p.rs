@@ -188,6 +188,24 @@ impl P2p{
                 }
             }
 
+
+
+            SwarmEvent::Dialing { peer_id, connection_id } => {
+                println!("Dialing {:?} with connection id {:?}", peer_id, connection_id);
+            },
+            
+            SwarmEvent::ConnectionEstablished { peer_id, connection_id, endpoint, num_established, concurrent_dial_errors, established_in } => {
+                println!("Connection established with {:?} with connection id {:?} at endpoint {:?} established connections, {:?} concurrent dial errors and {:?} established in {:?}", peer_id, connection_id, endpoint, num_established, concurrent_dial_errors, established_in);
+            },
+            
+            SwarmEvent::ConnectionClosed { peer_id, cause, connection_id, num_established, endpoint } => {
+                println!("Connection closed with {:?} with connection id {:?} at endpoint {:?} with {:?} established connections and cause {:?}", peer_id, connection_id, endpoint, num_established, cause);
+
+            },
+
+            SwarmEvent::IncomingConnection { local_addr, connection_id, send_back_addr } => {
+                println!("Incoming connection from {:?} with send back address {:?}", local_addr, send_back_addr);
+            },
             //Handle inbound Floodsub subscriptions
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Floodsub(FloodsubEvent::Subscribed {peer_id, topic})) => {
 
@@ -223,6 +241,7 @@ impl P2p{
                         }
                         println!("Node known");
                         self.swarm.add_external_address(addr.clone());
+                        self.swarm.behaviour_mut().reqres.add_address(&peer_id, addr.clone());
                         println!("current address: {:?}", addr);
                         let opts = DialOpts::peer_id(peer_id.clone())
                             .condition(PeerCondition::Always)
@@ -239,9 +258,12 @@ impl P2p{
                 
             },
 
+            
             SwarmEvent::Behaviour(behaviour::BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
                 for (peer_id, addr) in peers {
                     println!("Expired: {:?} at {:?}", peer_id, addr);
+                    self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&peer_id);
+                    self.swarm.behaviour_mut().reqres.remove_address(&peer_id, &addr);
                 }
             },
 
