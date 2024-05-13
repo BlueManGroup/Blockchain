@@ -222,7 +222,7 @@ impl P2p{
                         println!("Node known");
                         self.swarm.add_external_address(addr.clone());
                         println!("current address: {:?}", addr);
-                        self.swarm.dial(peer_id).expect("Failed to dial address");
+                        // self.swarm.dial(peer_id).expect("Failed to dial address");
                         self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id.clone());
                         println!("node is connected: {:?}", self.swarm.is_connected(&peer_id));
                     } else {
