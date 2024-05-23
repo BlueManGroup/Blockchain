@@ -119,7 +119,7 @@ impl Node {
         payload_msg.extend_from_slice(block.hash.as_bytes()); // send hash of block in signature
         payload_msg.extend_from_slice(self.p2p.local_peer_id.to_bytes().as_slice()); //send peerid in signature for further confirmation that im me
         let name_clone = self.p2p.local_peer_id.to_string(); // send name (peerid ?) for easy identification (receiver can just look up pubkey)
-        let payload = Payload::new(block, name_clone, dilithium3::sign(payload_msg.as_slice(), &self.secretkey));
+        let payload = Payload::new(block, name_clone, dilithium3::sign(payload_msg.as_slice(), &self.publickey));
         
         payload
     }
