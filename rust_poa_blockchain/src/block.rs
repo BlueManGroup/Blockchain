@@ -36,13 +36,10 @@ impl Block {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&self.index.to_be_bytes());
-        bytes.extend_from_slice(&self.timestamp.to_be_bytes());
-        bytes.extend_from_slice(self.prev_block_hash.as_bytes());
-        bytes.extend_from_slice(self.hash.as_bytes());
-        bytes.extend_from_slice(self.data.as_bytes());
-        bytes
+        // Serialize the struct to a JSON string
+        let json_string = serde_json::to_string(self);
+        // Convert the JSON string to bytes
+        json_string.unwrap().into_bytes()
     }
 
     pub fn to_block(value: serde_json::Value) -> Block {
