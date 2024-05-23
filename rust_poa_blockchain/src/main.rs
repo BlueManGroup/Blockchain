@@ -10,6 +10,7 @@ mod networking;
 mod node;
 
 
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>>{ 
     let (inc_tx, inc_rx) = mpsc::channel();
@@ -70,6 +71,11 @@ async fn main() -> Result<(), Box<dyn Error>>{
                         node.p2p.swarm.external_addresses().for_each(|addr| {
                             println!("Swarm contact: {:?}", addr);
                         });
+                    }
+                    "test add block" => {
+                        println!("adding test block");
+                        let block = node.blockchain.new_local_block(String::from("poopie 2 :D"));
+                        node.p2p.send_blockbytes_to_nodes(block.to_bytes()).await.unwrap();
                     }
                     _ => {
                         println!("Invalid command");

@@ -12,6 +12,7 @@ use rand::seq::SliceRandom;
 use serde::{Serialize, Deserialize};
 use libp2p::PeerId; 
 use crate::networking::reqres;
+use std::sync::mpsc;
 
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -119,7 +120,7 @@ impl Node {
         payload_msg.extend_from_slice(block.hash.as_bytes()); // send hash of block in signature
         payload_msg.extend_from_slice(self.p2p.local_peer_id.to_bytes().as_slice()); //send peerid in signature for further confirmation that im me
         let name_clone = self.p2p.local_peer_id.to_string(); // send name (peerid ?) for easy identification (receiver can just look up pubkey)
-        let payload = Payload::new(block, name_clone, dilithium3::sign(payload_msg.as_slice(), &self.publickey));
+        let payload = Payload::new(block, name_clone, dilithium3::sign(payload_msg.as_slice(), &self.secretkey));
         
         payload
     }
@@ -217,6 +218,8 @@ impl Node {
         let payload: Payload;
         let mut out_msg: String = String::new();
 
+        let block = block::Block::to_block(deserialized_message.get("block").unwrap().to_owned());
+        print!("block: {:?}", block);
         // if validator payload enter this abomination
         if let Some(validator_sig) = deserialized_message.get("validator_id") {
             validator_payload = ValidatorPayload::to_validator_payload(deserialized_message.to_owned());
@@ -269,7 +272,7 @@ impl Node {
        }
 
 
-       self.blockchain.add_block(payload.block.to_owned(), payload.author_id.to_owned());
+       self.blockchain.add_block(payload.block.to_owned());
        out_msg = serde_json::to_string(&validator_payload).unwrap();
        println!("message sent to node(s): {:?}", out_msg);
        self.out_msg_tx.send(serde_json::to_string(&out_msg).unwrap()).unwrap();

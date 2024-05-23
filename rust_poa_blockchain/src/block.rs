@@ -53,7 +53,6 @@ impl Block {
 #[derive(Debug)]
 pub struct Blockchain {
     pub chain: Vec<Block>,
-    pub authorities: Vec<String>, // Public keys or identifiers of authorized nodes
     file_tracker: storage::FileTracker,
 }
 
@@ -69,17 +68,11 @@ impl Blockchain {
         let file_tracker = storage::FileTracker::new(1, String::from("blocks"));
         Blockchain {
             chain: vec![genesis_block],
-            authorities: Vec::new(), // Initialize with known authorities
             file_tracker: file_tracker
         }
     }
 
-    pub fn add_block(&mut self, block: Block, authority: String) {
-        if !self.authorities.contains(&authority) {
-            println!("Authority not recognized.");
-            return;
-        }
-
+    pub fn add_block(&mut self, block: Block) {
         storage::append_blocks_to_file(&[&block], &mut self.file_tracker).unwrap();
         self.chain.push(block);
         println!("tracker in blocks after increment: {}", self.file_tracker.cur_enum);
@@ -137,15 +130,21 @@ impl Blockchain {
 
         let last_block_index = self.chain.len() - 1;
         let cur_block = &self.chain[last_block_index];
-        if block.index != cur_block.index {
+        if block.index != cur_block.index + 1{
+            print!("{:?}", block.index);
+            print!("{:?}", cur_block.index);
+            println!("index mismatch");
             return false;
+            
         }
 
         if block.prev_block_hash != cur_block.hash {
+            print!("prev hash mismatch");
             return false;
         }
 
         if block.calculate_hash() != block.hash {
+            print!("hash mismatch");
             return false;
         }
 
@@ -160,4 +159,82 @@ impl Blockchain {
     //         }
          //}
     //}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_block() {
+        let block = Block::new(1, 1627836000, String::from("1ee04c825754c08520edd070f7c1cbab79a91098ebd4f3afe994f37fbb659bf6"), String::from("data"));
+        assert_eq!(block.index, 1);
+        assert_eq!(block.timestamp, 1627836000);
+        assert_eq!(block.prev_block_hash, "1ee04c825754c08520edd070f7c1cbab79a91098ebd4f3afe994f37fbb659bf6");
+        assert_eq!(block.data, "data");
+    }
+
+    #[test]
+    fn test_calculate_hash() {
+        let block = Block::new(1, 1627836000, String::from("1ee04c825754c08520edd070f7c1cbab79a91098ebd4f3afe994f37fbb659bf6"), String::from("data"));
+        let hash = block.calculate_hash();
+        assert_eq!(hash.len(), 64); // SHA256 hash length is 64 characters
+    }
+
+    #[test]
+    fn test_to_bytes() {
+        let block = Block::new(1, 1627836000, String::from("1ee04c825754c08520edd070f7c1cbab79a91098ebd4f3afe994f37fbb659bf6"), String::from("data"));
+        let bytes = block.to_bytes();
+        assert_eq!(bytes.len(), 148); // 8 bytes for index, 8 bytes for timestamp, 124 bytes for prev_block_hash, 32 bytes for hash, 16 bytes for data
+    }
+
+    #[test]
+    fn test_to_block() {
+        let json = serde_json::json!({
+            "index": 1,
+            "timestamp": 1627836000,
+            "prev_block_hash": "1ee04c825754c08520edd070f7c1cbab79a91098ebd4f3afe994f37fbb659bf6",
+            "hash": "block_hash",
+            "data": "data"
+        });
+        let block = Block::to_block(json);
+        assert_eq!(block.index, 1);
+        assert_eq!(block.timestamp, 1627836000);
+        assert_eq!(block.prev_block_hash, "1ee04c825754c08520edd070f7c1cbab79a91098ebd4f3afe994f37fbb659bf6");
+        assert_eq!(block.hash, "block_hash");
+        assert_eq!(block.data, "data");
+    }
+
+    #[test]
+    fn test_new_blockchain() {
+        let blockchain = Blockchain::new();
+        assert_eq!(blockchain.chain.len(), 1); // Genesis block should be added
+        assert_eq!(blockchain.file_tracker.cur_block, 0);
+    }
+
+    #[test]
+    fn test_add_block() {
+        let mut blockchain = Blockchain::new();
+        let block = Block::new(1, 1627836000, String::from("1ee04c825754c08520edd070f7c1cbab79a91098ebd4f3afe994f37fbb659bf6"), String::from("data"));
+        blockchain.add_block(block);
+        assert_eq!(blockchain.chain.len(), 2); // New block should be added
+        assert_eq!(blockchain.file_tracker.cur_block, 1);
+    }
+
+    #[test]
+    fn test_new_local_block() {
+        let mut blockchain = Blockchain::new();
+        let block = blockchain.new_local_block(String::from("data"));
+        assert_eq!(blockchain.chain.len(), 2); // New block should be added
+        assert_eq!(blockchain.file_tracker.cur_block, 1);
+        assert_eq!(block.data, "data");
+    }
+
+    #[test]
+    fn test_is_block_valid() {
+        let mut blockchain = Blockchain::new();
+        blockchain.new_local_block("data".to_string());
+        let block2 = Block::new(2, 1627836001, String::from(&blockchain.chain[1].hash), String::from("data"));
+        assert!(blockchain.is_block_valid(block2));
+    }
 }

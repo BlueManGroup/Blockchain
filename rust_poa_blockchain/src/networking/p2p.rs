@@ -7,6 +7,8 @@ use libp2p::Multiaddr;
 use libp2p::swarm::SwarmEvent;
 use libp2p::swarm::Swarm;
 //use std::collections::HashMap;
+use pqcrypto_dilithium::dilithium3;
+use pqcrypto_traits::sign::{PublicKey,SecretKey, SignedMessage};
 use std::time::Duration;
 use libp2p::floodsub::{FloodsubEvent, Topic};
 use libp2p::identity;
@@ -305,6 +307,13 @@ impl P2p{
         Ok(())
     }
 
+    pub async fn send_blockbytes_to_nodes(&mut self, msg: Vec<u8>) -> Result<(),()> {
+        //let block_str = serde_json::to_string(&msg).unwrap();
+        self.swarm.behaviour_mut().floodsub.publish(self.floodsub_topic.clone(), msg.to_owned());
+        println!("sent msg: {:?}", msg);
+        Ok(())
+    }
+
     // pub async fn 
     // target = (dilithiumkey, peerid)
     //
@@ -319,6 +328,7 @@ impl P2p{
             target_ip = target.1;
         };
         
+    
         // let local_peer_id_decoded = general_purpose::STANDARD.decode(local_peer_id_b64);
         // let local_peer_id = PeerId::from_bytes(&local_peer_id_decoded.unwrap());
         // //let local_peer_id = PeerId::from_bytes(general_purpose::STANDARD.decode_slice(dotenv::var("PEER_ID").unwrap().as_bytes()));
@@ -332,9 +342,9 @@ impl P2p{
             self.known_nodes.remove(index);
             println!("node removed!!");
         }
-        println!("known nodes: {:?}", self.known_nodes);
-        let target_public_key = identity::PublicKey::try_decode_protobuf(&target_key).expect("error getting key from bytes");
-        let target_peer_id = PeerId::from_public_key(&target_public_key);
+        // println!("known nodes: {:?}", self.known_nodes);
+        // let target_public_key = identity::PublicKey::try_decode_protobuf(&target_key).expect("error getting key from bytes");
+        let target_peer_id = PeerId::from_bytes(&target_ip).expect("error getting peer id from bytes");
         
         println!("node boot done :sunglasses:");
         
@@ -347,3 +357,79 @@ impl P2p{
 
 }
 //2 p || !2 p
+
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+
+    use pqcrypto_dilithium::dilithium3;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_key_from_peer_id() {
+        let (inc_msg_queue, temp) = mpsc::channel();
+        let (temp2, _out_msg_queue) = mpsc::channel();
+        let mut p2p = P2p::new(inc_msg_queue, _out_msg_queue);
+
+        let peer_id = vec![1, 2, 3, 4];
+        let key = vec![5, 6, 7, 8];
+        p2p.known_nodes.push((key.clone(), peer_id.clone()));
+
+        let result = p2p.get_key_from_peer_id(peer_id.clone());
+
+        assert_eq!(result, Some(key));
+    }
+
+    #[tokio::test]
+    async fn test_get_peer_id_from_key() {
+        let (inc_msg_queue, temp) = mpsc::channel();
+        let (temp2, _out_msg_queue) = mpsc::channel();
+
+
+        let mut p2p = P2p::new(inc_msg_queue, _out_msg_queue);
+
+
+
+        let peer_id = vec![1, 2, 3, 4];
+        let key = vec![5, 6, 7, 8];
+        p2p.known_nodes.push((key.clone(), peer_id.clone()));
+
+        let result = p2p.get_peer_id_from_key(key.clone());
+
+        assert_eq!(result, Some(peer_id));
+    }
+
+    #[tokio::test]
+    async fn test_send_block_to_nodes() {
+        let (inc_msg_queue, temp) = mpsc::channel();
+        let (temp2, _out_msg_queue) = mpsc::channel();
+
+        let mut p2p = P2p::new(inc_msg_queue, _out_msg_queue);
+
+        let msg = "Test message".to_string();
+        let result = p2p.send_block_to_nodes(msg.clone()).await;
+
+        assert_eq!(result, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn test_give_node_the_boot() {
+        let (inc_msg_queue, temp) = mpsc::channel();
+        let (temp2, _out_msg_queue) = mpsc::channel();
+        let mut p2p = P2p::new(inc_msg_queue, _out_msg_queue);
+
+
+        let peer_id = PeerId::random().to_bytes();
+        let key = dilithium3::keypair().0.as_bytes().to_vec(); // Assign the value to a variable
+        p2p.known_nodes.push((key.clone(), peer_id.clone()));
+        let temp3 = "NULL".as_bytes().to_owned();
+
+        let target = (temp3,peer_id.clone());
+        let result = p2p.give_node_the_boot(target).await;
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(p2p.known_nodes.len(), 3); // 3 nodes are already present
+    }
+}
