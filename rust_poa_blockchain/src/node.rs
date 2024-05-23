@@ -118,7 +118,7 @@ impl Node {
         let mut payload_msg = Vec::new();
         payload_msg.extend_from_slice(); // send hash of block in signature
         let name_clone = self.p2p.local_peer_id.to_string(); // send name (peerid ?) for easy identification (receiver can just look up pubkey)
-        let payload = Payload::new(block, name_clone, dilithium3::sign(block.hash.as_bytes(), &self.publickey));
+        let payload = Payload::new(block, name_clone, dilithium3::sign(block.hash.as_bytes(), &self.secretkey));
         
         payload
     }
