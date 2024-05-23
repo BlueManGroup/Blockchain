@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, io::Read};
 use crate::{block, networking};
 use std::sync::mpsc::{Sender, Receiver};
 use pqcrypto_dilithium::dilithium3;
@@ -170,7 +170,11 @@ impl Node {
     }
 
     pub fn deserialize_message(message: &[u8]) -> Result<serde_json::Value, serde_json::Error> {
-        let payload = serde_json::json!(message);
+        let message_str = std::str::from_utf8(message).unwrap();
+    
+        // Parse the string as JSON
+        let payload: serde_json::Value = serde_json::from_str(message_str)?;
+        
         Ok(payload)
     }
 
