@@ -116,10 +116,9 @@ impl Node {
 
     pub fn create_block_payload(&self, block: block::Block) -> Payload {
         let mut payload_msg = Vec::new();
-        payload_msg.extend_from_slice(block.hash.as_bytes()); // send hash of block in signature
-        payload_msg.extend_from_slice(self.p2p.local_peer_id.to_bytes().as_slice()); //send peerid in signature for further confirmation that im me
+        payload_msg.extend_from_slice(); // send hash of block in signature
         let name_clone = self.p2p.local_peer_id.to_string(); // send name (peerid ?) for easy identification (receiver can just look up pubkey)
-        let payload = Payload::new(block, name_clone, dilithium3::sign(payload_msg.as_slice(), &self.publickey));
+        let payload = Payload::new(block, name_clone, dilithium3::sign(block.hash.as_bytes(), &self.publickey));
         
         payload
     }
