@@ -218,8 +218,9 @@ impl Node {
         let payload: Payload;
         let mut out_msg: String = String::new();
 
-        let block = block::Block::to_block(deserialized_message.get("block").unwrap().to_owned());
-        print!("block: {:?}", block);
+        println!("deserialized message: {:?}", deserialized_message);
+        // let block = block::Block::to_block(deserialized_message.get("block").unwrap().to_owned());
+        // print!("block: {:?}", block);
         // if validator payload enter this abomination
         if let Some(validator_sig) = deserialized_message.get("validator_id") {
             validator_payload = ValidatorPayload::to_validator_payload(deserialized_message.to_owned());
