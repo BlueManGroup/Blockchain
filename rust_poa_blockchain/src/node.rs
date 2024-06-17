@@ -232,6 +232,7 @@ impl Node {
         if deserialized_message.get("hash") != None {
             let block = block::Block::to_block(deserialized_message.to_owned());
             self.blockchain.add_block(block);
+            return Ok(true);
         }
 
         // println!("deserialized message: {:?}", deserialized_message.clone());
