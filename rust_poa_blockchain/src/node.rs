@@ -229,7 +229,12 @@ impl Node {
         let payload: Payload;
         let mut out_msg: String = String::new();
 
-        println!("deserialized message: {:?}", deserialized_message);
+        if deserialized_message.get("hash") != None {
+            let block = block::Block::to_block(deserialized_message.to_owned());
+            self.blockchain.add_block(block);
+        }
+
+        // println!("deserialized message: {:?}", deserialized_message.clone());
         // let block = block::Block::to_block(deserialized_message.get("block").unwrap().to_owned());
         // print!("block: {:?}", block);
         // if validator payload enter this abomination

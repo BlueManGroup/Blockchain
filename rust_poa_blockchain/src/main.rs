@@ -75,8 +75,9 @@ async fn main() -> Result<(), Box<dyn Error>>{
                     "test add block" => {
                         println!("adding test block");
                         let block = node.blockchain.new_local_block(String::from("poopie 2 :D"));
-                        let payload = node.create_block_payload(block);
-                        node.p2p.send_blockbytes_to_nodes(payload.to_bytes()).await.unwrap();
+                        // let payload = node.create_block_payload(block); // should work, but doesn't, too bad
+                        // node.p2p.send_blockbytes_to_nodes(payload.to_bytes()).await.unwrap();
+                        node.p2p.send_blockbytes_to_nodes(block.to_bytes()).await.unwrap();
                     }
                     _ => {
                         println!("Invalid command");
