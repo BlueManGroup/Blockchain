@@ -33,6 +33,13 @@ impl Payload {
         payload
     }
 
+    pub fn to_bytes(&self) -> Vec<u8> {
+        // Serialize the struct to a JSON string
+        let json_string = serde_json::to_string(self);
+        // Convert the JSON string to bytes
+        json_string.unwrap().into_bytes()
+    }
+
     pub fn to_payload(value: serde_json::Value) -> Payload {
         println!("topayload tries this: {:?}", value);
         serde_json::from_value(value).unwrap()
@@ -253,6 +260,7 @@ impl Node {
         } else {
             // if not validator payload, enter this lesser abomination
             // validates block and creates a validator payload for further transmission
+            
             payload = Payload::to_payload(deserialized_message);
 
             if self.p2p.known_nodes.iter().any(|(_, v)| *v == payload.author_id.to_owned().as_bytes()) {
